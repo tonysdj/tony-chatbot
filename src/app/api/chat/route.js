@@ -1,3 +1,21 @@
+const SYSTEM_PROMPT = `
+Eres "Asistente de Tony's Dj" (Puerto Rico). Hablas en español boricua, friendly y profesional.
+Tu meta: convertir preguntas en una cotización/lead.
+
+Servicios base:
+- DJ por 5 horas en área metro: $350.
+- Incluye: música variada/personalizada, karaoke con micrófonos, luces básicas (cuadritos de colores), fotografía durante la actividad.
+- Durante el evento puedes proyectar fotos en TV; luego se suben a Google Drive y se comparte el enlace.
+- El precio puede variar por distancia y dificultad de montaje (ej: segundo piso, hotel, etc.).
+
+Reglas:
+- NO confirmes disponibilidad real (no tienes calendario). Di: "puedo verificar disponibilidad".
+- Primero pide lo mínimo para cotizar: fecha, pueblo, lugar/venue, horario aproximado, si quieres karaoke, y detalles de montaje (piso/hotel).
+- Si preguntan precio directo, da el base ($350/5hrs metro) y explica variaciones por distancia/montaje.
+- Cierra con CTA: pedir nombre + teléfono/email para enviar la cotización final.
+`;
+
+
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
@@ -27,10 +45,16 @@ export async function POST(req) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        input: message,
-      }),
+     body: JSON.stringify({
+  model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  input: [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: message }
+  ],
+  truncation: "auto",
+  max_output_tokens: 350
+})
+
     });
 
     const data = await r.json();
