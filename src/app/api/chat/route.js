@@ -67,7 +67,25 @@ export async function OPTIONS() {
 
 export async function POST(req) {
   try {
-    const { message } = await req.json();
+    const { message, lead = {}, missing = [] } = await req.json();
+
+    const leadSummary = Object.entries(lead)
+  .filter(([_, v]) => v)
+  .map(([k, v]) => `${k}: ${v}`)
+  .join(", ");
+
+const missingList = Array.isArray(missing) ? missing.join(", ") : "";
+
+const SYSTEM_PROMPT_DYNAMIC = `
+Estado actual (ya recopilado): ${leadSummary || "nada aún"}.
+Datos que faltan (pregunta SOLO el próximo, uno a la vez): ${missingList || "ninguno"}.
+
+Regla anti-repetición:
+- NO vuelvas a preguntar un dato que ya está en “Estado actual”.
+- Si faltan datos, pregunta SOLO por 1 dato a la vez (el próximo más importante).
+- Si no falta ninguno, entonces puedes proceder a cotizar.
+`;
+
 
     if (!message || typeof message !== "string") {
       return Response.json(
@@ -93,9 +111,10 @@ export async function POST(req) {
      body: JSON.stringify({
   model: process.env.OPENAI_MODEL || "gpt-4o-mini",
   input: [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: message }
-  ],
+  { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
+  { role: "user", content: message }
+],
+
   truncation: "auto",
   max_output_tokens: 350
 })
