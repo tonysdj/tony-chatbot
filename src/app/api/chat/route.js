@@ -65,10 +65,10 @@ ZONA D – Lejos:
 Ponce, Mayagüez, Aguadilla, Cabo Rojo, Isabela, Hatillo, Jayuya, Utuado, Yauco.
 Extra: $150
 
-FLUJO FINAL OBLIGATORIO:
-Cuando ya tengas toda la información:
-- Presenta un resumen del evento
-- Presenta la cotización
+FLUJO FINAL OBLIGATORIO (CUANDO YA TENGAS TODA LA INFORMACIÓN):
+Cuando ya tengas los 7 datos requeridos:
+- Presenta un resumen claro del evento
+- Presenta la cotización organizada
 - Indica que Tony puede confirmar disponibilidad
 
 ESTILO:
@@ -86,9 +86,6 @@ export async function POST(req) {
   try {
     const { message, lead = {}, missing = [] } = await req.json();
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-
     if (!message || typeof message !== "string") {
       return Response.json(
         { error: "Missing message" },
@@ -104,67 +101,44 @@ export async function POST(req) {
       );
     }
 
-    // ✅ Enviar email solo cuando el lead esté completo
-if (Array.isArray(missing) && missing.length === 0) {
-  try {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-      to: process.env.EMAIL_TO,
-      subject: "Nuevo lead – Tony’s DJ",
-      html: `
-        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
-          <h2>Nuevo lead – Tony’s DJ</h2>
-          <p><b>Nombre:</b> ${lead?.name || ""}</p>
-          <p><b>Fecha:</b> ${lead?.date || ""}</p>
-          <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
-          <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
-          <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
-          <p><b>Email:</b> ${lead?.email || ""}</p>
-          <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
-        </div>
-      `,
-    });
-    console.log("✅ Email enviado a", process.env.EMAIL_TO);
-  } catch (error) {
-    console.error("❌ Error enviando email:", error);
-  }
-}
+    // ✅ Email SOLO cuando el lead esté completo (missing vacío)
+    if (Array.isArray(missing) && missing.length === 0) {
+      if (!process.env.RESEND_API_KEY) {
+        console.error("❌ RESEND_API_KEY no está disponible en runtime (revisa Vercel env vars en Production).");
+      } else if (!process.env.EMAIL_TO) {
+        console.error("❌ EMAIL_TO no está configurado en Vercel env vars.");
+      } else {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
 
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+            to: process.env.EMAIL_TO,
+            subject: "Nuevo lead – Tony’s DJ",
+            html: `
+              <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
+                <h2>Nuevo lead – Tony’s DJ</h2>
+                <p><b>Nombre:</b> ${lead?.name || ""}</p>
+                <p><b>Fecha:</b> ${lead?.date || ""}</p>
+                <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
+                <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
+                <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
+                <p><b>Email:</b> ${lead?.email || ""}</p>
+                <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
+                <hr />
+                <p>Enviado automáticamente desde el chatbot.</p>
+              </div>
+            `,
+          });
 
-    // 👉 ENVIAR EMAIL SOLO CUANDO EL LEAD ESTÁ COMPLETO
-    if (
-      Array.isArray(missing) &&
-      missing.length === 0 &&
-      process.env.RESEND_API_KEY &&
-      process.env.EMAIL_TO
-    ) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-
-        await resend.emails.send({
-          from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-          to: process.env.EMAIL_TO,
-          subject: "Nuevo lead – Tony’s DJ",
-          html: `
-            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
-              <h2>Nuevo lead – Tony’s DJ</h2>
-              <p><b>Nombre:</b> ${lead?.name || ""}</p>
-              <p><b>Fecha:</b> ${lead?.date || ""}</p>
-              <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
-              <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
-              <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
-              <p><b>Email:</b> ${lead?.email || ""}</p>
-              <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
-              <hr />
-              <p>Mensaje enviado automáticamente desde el chatbot.</p>
-            </div>
-          `,
-        });
-      } catch (e) {
-        console.error("Error enviando email:", e);
+          console.log("✅ Email enviado a", process.env.EMAIL_TO);
+        } catch (err) {
+          console.error("❌ Error enviando email:", err);
+        }
       }
     }
 
+    // Prompt dinámico para evitar repetir preguntas
     const leadSummary = Object.entries(lead)
       .filter(([_, v]) => v)
       .map(([k, v]) => `${k}: ${v}`)
@@ -173,11 +147,16 @@ if (Array.isArray(missing) && missing.length === 0) {
     const missingList = Array.isArray(missing) ? missing.join(", ") : "";
 
     const SYSTEM_PROMPT_DYNAMIC = `
-Estado actual: ${leadSummary || "nada aún"}.
-Datos que faltan: ${missingList || "ninguno"}.
-Pregunta SOLO el próximo dato faltante.
+Estado actual (ya recopilado): ${leadSummary || "nada aún"}.
+Datos que faltan (pregunta SOLO el próximo, uno a la vez): ${missingList || "ninguno"}.
+
+Reglas:
+- NO repitas un dato que ya esté en el estado actual.
+- Si faltan datos, pregunta SOLO 1 dato a la vez.
+- Si no falta ninguno, procede a resumir y cotizar.
 `;
 
+    // Llamada a OpenAI
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -188,14 +167,22 @@ Pregunta SOLO el próximo dato faltante.
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
           { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         truncation: "auto",
-        max_output_tokens: 350
-      })
+        max_output_tokens: 350,
+      }),
     });
 
     const data = await r.json();
+
+    if (!r.ok) {
+      console.error("OpenAI error:", data);
+      return Response.json(
+        { error: "OpenAI error", details: data },
+        { status: r.status, headers: corsHeaders() }
+      );
+    }
 
     const text =
       data.output_text ||
@@ -203,8 +190,8 @@ Pregunta SOLO el próximo dato faltante.
       "";
 
     return Response.json({ reply: text }, { headers: corsHeaders() });
-
   } catch (err) {
+    console.error("Server error:", err);
     return Response.json(
       { error: "Server error", details: String(err) },
       { status: 500, headers: corsHeaders() }
