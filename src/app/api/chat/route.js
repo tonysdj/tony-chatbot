@@ -101,43 +101,6 @@ export async function POST(req) {
       );
     }
 
-    // ✅ Email SOLO cuando el lead esté completo (missing vacío)
-    if (sendEmail && Array.isArray(missing) && missing.length === 0) {
-      if (!process.env.RESEND_API_KEY) {
-        console.error("❌ RESEND_API_KEY no está disponible en runtime (revisa Vercel env vars en Production).");
-      } else if (!process.env.EMAIL_TO) {
-        console.error("❌ EMAIL_TO no está configurado en Vercel env vars.");
-      } else {
-        try {
-          const resend = new Resend(process.env.RESEND_API_KEY);
-
-          await resend.emails.send({
-            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-            to: process.env.EMAIL_TO,
-            subject: "Nuevo lead – Tony’s DJ",
-            html: `
-              <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
-                <h2>Nuevo lead – Tony’s DJ</h2>
-                <p><b>Nombre:</b> ${lead?.name || ""}</p>
-                <p><b>Fecha:</b> ${lead?.date || ""}</p>
-                <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
-                <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
-                <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
-                <p><b>Email:</b> ${lead?.email || ""}</p>
-                <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
-                <hr />
-                <p>Enviado automáticamente desde el chatbot.</p>
-              </div>
-            `,
-          });
-
-          console.log("✅ Email enviado a", process.env.EMAIL_TO);
-        } catch (err) {
-          console.error("❌ Error enviando email:", err);
-        }
-      }
-    }
-
     // Prompt dinámico para evitar repetir preguntas
     const leadSummary = Object.entries(lead)
       .filter(([_, v]) => v)
@@ -189,11 +152,61 @@ Reglas:
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-console.log("📨 INTENTANDO ENVIAR EMAIL CON RESEND");
-console.log("Lead recibido:", lead);
+    // ✅ Email (CON la cotización/respuesta del bot) SOLO cuando el lead esté completo
+    if (sendEmail && Array.isArray(missing) && missing.length === 0) {
+      if (!process.env.RESEND_API_KEY) {
+        console.error("❌ RESEND_API_KEY no está disponible en runtime (revisa Vercel env vars en Production).");
+      } else if (!process.env.EMAIL_TO) {
+        console.error("❌ EMAIL_TO no está configurado en Vercel env vars.");
+      } else {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+
+          const botHtml = (text || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br/>");
+
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+            to: process.env.EMAIL_TO,
+            subject: `Cotización Tony’s DJ – ${lead?.name || "Cliente"} – ${lead?.date || ""} – ${lead?.town || ""}`,
+            html: `
+              <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto; line-height:1.4">
+                <h2>Cotización / Respuesta enviada al cliente</h2>
+
+                <div style="padding:12px;border:1px solid #eee;border-radius:10px;background:#fafafa">
+                  ${botHtml || "Sin texto"}
+                </div>
+
+                <hr />
+
+                <h3>Datos del lead</h3>
+                <p><b>Nombre:</b> ${lead?.name || ""}</p>
+                <p><b>Fecha:</b> ${lead?.date || ""}</p>
+                <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
+                <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
+                <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
+                <p><b>Email:</b> ${lead?.email || ""}</p>
+                <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
+
+                <p style="margin-top:16px;color:#666;font-size:12px">
+                  Enviado automáticamente desde el chatbot.
+                </p>
+              </div>
+            `,
+          });
+
+          console.log("✅ Email (con cotización del bot) enviado a", process.env.EMAIL_TO);
+        } catch (err) {
+          console.error("❌ Error enviando email:", err);
+        }
+      }
+    }
 
     console.log("✅ TERMINÓ PROCESO POST /api/chat");
-    
+
     return Response.json({ reply: text }, { headers: corsHeaders() });
   } catch (err) {
     console.error("Server error:", err);
