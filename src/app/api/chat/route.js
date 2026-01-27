@@ -110,6 +110,7 @@ ESTILO DE RESPUESTA:
 
 
 `;
+import { Resend } from "resend";
 
 
 export async function OPTIONS() {
