@@ -169,7 +169,7 @@ Reglas:
             .replace(/\n/g, "<br/>");
 
           await resend.emails.send({
-            from: process.env.EMAIL_FROM || "onboarding@resending.com",
+            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
             to: process.env.EMAIL_TO,
             subject: `Nuevo Evento Tony’s DJ – ${lead?.name || "Cliente"} – ${lead?.date || ""} – ${lead?.town || ""}`,
             html: `
