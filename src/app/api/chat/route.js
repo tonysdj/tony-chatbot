@@ -1,3 +1,5 @@
+import { Resend } from "resend";
+
 const SYSTEM_PROMPT = `
 Eres “Asistente de Tony’s DJ”, asistente oficial de servicios de DJ en Puerto Rico.
 Hablas en español boricua, con tono profesional, claro y amable.
@@ -110,7 +112,6 @@ ESTILO DE RESPUESTA:
 
 
 `;
-import { Resend } from "resend";
 
 
 export async function OPTIONS() {
