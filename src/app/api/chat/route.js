@@ -86,6 +86,9 @@ export async function POST(req) {
   try {
     const { message, lead = {}, missing = [] } = await req.json();
 
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+
     if (!message || typeof message !== "string") {
       return Response.json(
         { error: "Missing message" },
@@ -100,6 +103,33 @@ export async function POST(req) {
         { status: 500, headers: corsHeaders() }
       );
     }
+
+    // ✅ Enviar email solo cuando el lead esté completo
+if (Array.isArray(missing) && missing.length === 0) {
+  try {
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+      to: process.env.EMAIL_TO,
+      subject: "Nuevo lead – Tony’s DJ",
+      html: `
+        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
+          <h2>Nuevo lead – Tony’s DJ</h2>
+          <p><b>Nombre:</b> ${lead?.name || ""}</p>
+          <p><b>Fecha:</b> ${lead?.date || ""}</p>
+          <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
+          <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
+          <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
+          <p><b>Email:</b> ${lead?.email || ""}</p>
+          <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
+        </div>
+      `,
+    });
+    console.log("✅ Email enviado a", process.env.EMAIL_TO);
+  } catch (error) {
+    console.error("❌ Error enviando email:", error);
+  }
+}
+
 
     // 👉 ENVIAR EMAIL SOLO CUANDO EL LEAD ESTÁ COMPLETO
     if (
