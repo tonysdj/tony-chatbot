@@ -189,6 +189,11 @@ Reglas:
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
+console.log("📨 INTENTANDO ENVIAR EMAIL CON RESEND");
+console.log("Lead recibido:", lead);
+
+    console.log("✅ TERMINÓ PROCESO POST /api/chat");
+    
     return Response.json({ reply: text }, { headers: corsHeaders() });
   } catch (err) {
     console.error("Server error:", err);
