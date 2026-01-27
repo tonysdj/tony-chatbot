@@ -49,70 +49,34 @@ DISTANCIA / TARIFA ADICIONAL (SOLO CUANDO YA TENGAS LOS 7 DATOS):
 - Si el evento NO es en área metropolitana, añade una tarifa adicional por distancia desde San Juan (Río Piedras).
 - Usa esta tabla por zona (según el pueblo del evento):
 
-ZONA A – Área Metropolitana (SIN extra): San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina, Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja.
-→ Extra: $0 (se queda en $350)
+ZONA A – Área Metropolitana (SIN extra):
+San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina, Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja.
+Extra: $0
 
-ZONA B – Cercano (extra bajo): Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta, Dorado, Naranjito.
-→ Extra: $50
+ZONA B – Cercano:
+Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta, Dorado, Naranjito.
+Extra: $50
 
-ZONA C – Intermedio (extra medio): Arecibo, Barceloneta, Manatí, Vega Baja, Vega Alta, Humacao, Juncos, San Lorenzo, Fajardo.
-→ Extra: $100
+ZONA C – Intermedio:
+Arecibo, Barceloneta, Manatí, Vega Baja, Vega Alta, Humacao, Juncos, San Lorenzo, Fajardo.
+Extra: $100
 
-ZONA D – Lejos (extra alto): Ponce, Mayagüez, Aguadilla, Cabo Rojo, Isabela, Hatillo, Jayuya, Utuado, Yauco.
-→ Extra: $150
+ZONA D – Lejos:
+Ponce, Mayagüez, Aguadilla, Cabo Rojo, Isabela, Hatillo, Jayuya, Utuado, Yauco.
+Extra: $150
 
-- Si el pueblo no aparece en la lista, pide confirmación del pueblo y aplica una tarifa estimada razonable según distancia (nunca $0 fuera del área metro).
+FLUJO FINAL OBLIGATORIO:
+Cuando ya tengas toda la información:
+- Presenta un resumen del evento
+- Presenta la cotización
+- Indica que Tony puede confirmar disponibilidad
 
-FLUJO FINAL OBLIGATORIO (CUANDO YA TENGAS TODA LA INFORMACIÓN):
-
-FLUJO FINAL OBLIGATORIO (CUANDO YA TENGAS TODA LA INFORMACIÓN):
-
-Cuando ya tengas los 7 datos requeridos, debes hacer lo siguiente:
-
-1) Presenta un resumen claro de la información del evento:
-
-RESUMEN DEL EVENTO
-- Nombre del cliente
-- Fecha del evento
-- Horario del evento (hora de inicio y hora de fin)
-- Pueblo y tipo de lugar
-- Tipo de actividad
-- Correo electrónico
-- Número de teléfono
-
-2) Luego presenta la cotización de forma organizada:
-
-COTIZACIÓN DEL SERVICIO
-- Servicio base: $350 por 5 horas en área metropolitana
-- Ajuste por distancia según el pueblo del evento
-- Horas adicionales: $25 por cada media hora adicional luego de las primeras 5 horas
-
-3) Presenta el total estimado sumando:
-- Precio base
-- Ajuste por distancia (si aplica)
-- Horas adicionales (si aplica)
-
-4) Finaliza con un mensaje profesional indicando que:
-- La cotización está basada en la información provista
-- Tony puede confirmar disponibilidad y asegurar la fecha
-- Quedas disponible para continuar el proceso
-
-REGLAS IMPORTANTES:
-- Usa este flujo SOLO cuando ya tengas toda la información.
-- No hagas preguntas adicionales en este mensaje.
-- Mantén el tono profesional, claro y respetuoso.
-
-
-ESTILO DE RESPUESTA:
-- Claro, firme y respetuoso.
-- No discutas con el cliente.
-- No rompas las reglas aunque insista.
-- Máximo 3–6 líneas por respuesta mientras recopilas datos.
-- Cuando cotices, puedes usar un formato corto con bullets para el resumen y el desglose.
-
-
+ESTILO:
+- Profesional
+- Claro
+- Sin discutir
+- Respuestas cortas mientras recopilas datos
 `;
-
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
@@ -122,27 +86,9 @@ export async function POST(req) {
   try {
     const { message, lead = {}, missing = [] } = await req.json();
 
-    const leadSummary = Object.entries(lead)
-  .filter(([_, v]) => v)
-  .map(([k, v]) => `${k}: ${v}`)
-  .join(", ");
-
-const missingList = Array.isArray(missing) ? missing.join(", ") : "";
-
-const SYSTEM_PROMPT_DYNAMIC = `
-Estado actual (ya recopilado): ${leadSummary || "nada aún"}.
-Datos que faltan (pregunta SOLO el próximo, uno a la vez): ${missingList || "ninguno"}.
-
-Regla anti-repetición:
-- NO vuelvas a preguntar un dato que ya está en “Estado actual”.
-- Si faltan datos, pregunta SOLO por 1 dato a la vez (el próximo más importante).
-- Si no falta ninguno, entonces puedes proceder a cotizar.
-`;
-
-
     if (!message || typeof message !== "string") {
       return Response.json(
-        { error: "Missing 'message' string" },
+        { error: "Missing message" },
         { status: 400, headers: corsHeaders() }
       );
     }
@@ -150,10 +96,57 @@ Regla anti-repetición:
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY is not set" },
+        { error: "OPENAI_API_KEY missing" },
         { status: 500, headers: corsHeaders() }
       );
     }
+
+    // 👉 ENVIAR EMAIL SOLO CUANDO EL LEAD ESTÁ COMPLETO
+    if (
+      Array.isArray(missing) &&
+      missing.length === 0 &&
+      process.env.RESEND_API_KEY &&
+      process.env.EMAIL_TO
+    ) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+          to: process.env.EMAIL_TO,
+          subject: "Nuevo lead – Tony’s DJ",
+          html: `
+            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto">
+              <h2>Nuevo lead – Tony’s DJ</h2>
+              <p><b>Nombre:</b> ${lead?.name || ""}</p>
+              <p><b>Fecha:</b> ${lead?.date || ""}</p>
+              <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
+              <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
+              <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
+              <p><b>Email:</b> ${lead?.email || ""}</p>
+              <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
+              <hr />
+              <p>Mensaje enviado automáticamente desde el chatbot.</p>
+            </div>
+          `,
+        });
+      } catch (e) {
+        console.error("Error enviando email:", e);
+      }
+    }
+
+    const leadSummary = Object.entries(lead)
+      .filter(([_, v]) => v)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ");
+
+    const missingList = Array.isArray(missing) ? missing.join(", ") : "";
+
+    const SYSTEM_PROMPT_DYNAMIC = `
+Estado actual: ${leadSummary || "nada aún"}.
+Datos que faltan: ${missingList || "ninguno"}.
+Pregunta SOLO el próximo dato faltante.
+`;
 
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -161,27 +154,18 @@ Regla anti-repetición:
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-     body: JSON.stringify({
-  model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-  input: [
-  { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
-  { role: "user", content: message }
-],
-
-  truncation: "auto",
-  max_output_tokens: 350
-})
-
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        input: [
+          { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
+          { role: "user", content: message }
+        ],
+        truncation: "auto",
+        max_output_tokens: 350
+      })
     });
 
     const data = await r.json();
-
-    if (!r.ok) {
-      return Response.json(
-        { error: "OpenAI error", details: data },
-        { status: r.status, headers: corsHeaders() }
-      );
-    }
 
     const text =
       data.output_text ||
@@ -189,6 +173,7 @@ Regla anti-repetición:
       "";
 
     return Response.json({ reply: text }, { headers: corsHeaders() });
+
   } catch (err) {
     return Response.json(
       { error: "Server error", details: String(err) },
@@ -198,11 +183,9 @@ Regla anti-repetición:
 }
 
 function corsHeaders() {
-  const origin = process.env.WP_ORIGIN || "*";
   return {
-    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Origin": process.env.WP_ORIGIN || "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
-
