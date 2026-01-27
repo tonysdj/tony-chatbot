@@ -84,7 +84,7 @@ export async function OPTIONS() {
 
 export async function POST(req) {
   try {
-    const { message, lead = {}, missing = [] } = await req.json();
+    const { message, lead = {}, missing = [], sendEmail = false } = await req.json();
 
     if (!message || typeof message !== "string") {
       return Response.json(
@@ -102,7 +102,7 @@ export async function POST(req) {
     }
 
     // ✅ Email SOLO cuando el lead esté completo (missing vacío)
-    if (Array.isArray(missing) && missing.length === 0) {
+    if (sendEmail && Array.isArray(missing) && missing.length === 0) {
       if (!process.env.RESEND_API_KEY) {
         console.error("❌ RESEND_API_KEY no está disponible en runtime (revisa Vercel env vars en Production).");
       } else if (!process.env.EMAIL_TO) {
