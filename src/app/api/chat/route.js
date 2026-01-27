@@ -169,9 +169,9 @@ Reglas:
             .replace(/\n/g, "<br/>");
 
           await resend.emails.send({
-            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+            from: process.env.EMAIL_FROM || ${lead?.email,
             to: process.env.EMAIL_TO,
-            subject: `Cotización Tony’s DJ – ${lead?.name || "Cliente"} – ${lead?.date || ""} – ${lead?.town || ""}`,
+            subject: `Nuevo Evento Tony’s DJ – ${lead?.name || "Cliente"} – ${lead?.date || ""} – ${lead?.town || ""}`,
             html: `
               <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto; line-height:1.4">
                 <h2>Cotización / Respuesta enviada al cliente</h2>
