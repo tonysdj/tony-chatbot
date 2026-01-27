@@ -85,10 +85,10 @@ Luego presenta la cotización con un desglose claro:
 
 💰 **Cotización del servicio**
 • Servicio base (5 horas – área metropolitana): $350
-• Ajuste por distancia ({zona o pueblo}): ${extra distancia}
-• Horas adicionales: {# medias horas} × $25 = ${total horas extra}
+• Ajuste por distancia ({zona o pueblo}): \${extra distancia}
+• Horas adicionales: {# medias horas} × $25 = \${total horas extra}
 
-➡️ **Total estimado:** **${TOTAL}**
+➡️ **Total estimado:** **\${TOTAL}**
 
 ────────────────────────
 CIERRE
