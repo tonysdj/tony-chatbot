@@ -198,6 +198,48 @@ Reglas:
             `,
           });
 
+          // 📧 Email de confirmación al cliente
+const customerEmail = (lead?.email || "").trim();
+
+if (customerEmail) {
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+    to: customerEmail,
+    subject: "Recibimos tu solicitud – Tony’s DJ",
+    html: `
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto; line-height:1.5">
+        <h2>¡Gracias por escribirnos! 🎧</h2>
+
+        <p>Hola ${lead?.name || ""},</p>
+
+        <p>
+          Recibimos tu solicitud para el evento
+          <b>${lead?.eventType || ""}</b>
+          en <b>${lead?.town || ""}</b>
+          el <b>${lead?.date || ""}</b>.
+        </p>
+
+        <p>
+          En breve Tony se estará comunicando contigo para confirmar
+          disponibilidad y detalles finales.
+        </p>
+
+        <p style="margin-top:16px;">
+          Gracias,<br/>
+          <b>Tony’s DJ</b>
+        </p>
+
+        <hr/>
+        <p style="font-size:12px;color:#666">
+          Este es un correo automático de confirmación.
+        </p>
+      </div>
+    `,
+  });
+
+  console.log("✅ Email de confirmación enviado al cliente:", customerEmail);
+}
+
           console.log("✅ Email (con cotización del bot) enviado a", process.env.EMAIL_TO);
         } catch (err) {
           console.error("❌ Error enviando email:", err);
