@@ -51,15 +51,15 @@ DISTANCIA / TARIFA ADICIONAL (SOLO CUANDO YA TENGAS LOS 7 DATOS):
 - Usa esta tabla por zona (según el pueblo del evento):
 
 ZONA A – Área Metropolitana (SIN extra):
-San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina, Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja.
+San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina, Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja, Dorado.
 Extra: $0
 
 ZONA B – Cercano:
-Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta, Dorado, Naranjito.
-Extra: $50
+Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta, Dorado, Vega Baja, Vega Alta, Naranjito.
+Extra: $25
 
 ZONA C – Intermedio:
-Arecibo, Barceloneta, Manatí, Vega Baja, Vega Alta, Humacao, Juncos, San Lorenzo, Fajardo.
+Arecibo, Barceloneta, Manatí,Humacao, Juncos, San Lorenzo, Fajardo.
 Extra: $100
 
 ZONA D – Lejos:
