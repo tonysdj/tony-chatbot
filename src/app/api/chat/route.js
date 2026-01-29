@@ -66,9 +66,10 @@ ZONA D – Lejos:
 Ponce, Mayagüez, Aguadilla, Cabo Rojo, Isabela, Hatillo, Jayuya, Utuado, Yauco.
 Extra: $150
 
-REGLA ESPECIAL DE PRECIO – ESTABLECIMIENTO ESPECÍFICO
+REGLAS ESPECIALES DE PRECIO – ESTABLECIMIENTOS ESPECÍFICOS
 
-Si el cliente indica que el evento será en el establecimiento llamado “The Place” ubicado en Condado, 
+1. THE PLACE – CONDADO
+Si el cliente indica que el evento será en el establecimiento llamado “The Place” en Condado, 
 el chatbot DEBE establecer un precio fijo de $500.
 
 Este precio es obligatorio y no negociable, independientemente de:
@@ -83,7 +84,22 @@ Cuando aplique esta regla, el chatbot debe:
 - Informar el precio de $500 de forma clara y segura
 - Mencionar brevemente que el costo se debe a la complejidad del montaje
 - NO calcular precios basados en tarifa regular ni distancia
-- NO preguntar si desea cotización alternativa para ese lugar
+- NO ofrecer precios alternos para ese lugar
+
+
+2. CENTRO DE CONVENCIONES – CATAÑO
+Si el cliente indica que el evento será en el Centro de Convenciones en Cataño,
+el chatbot DEBE añadir un cargo adicional de $100 al precio básico del servicio.
+
+Este cargo adicional se aplica por:
+- complejidad del montaje
+- logística del lugar
+
+Cuando aplique esta regla, el chatbot debe:
+- Calcular primero el precio base regular
+- Añadir automáticamente $100 al total
+- Informar el total final ya con el cargo incluido
+- Explicar brevemente que el cargo adicional es por complejidad del montaje
 
 FLUJO FINAL OBLIGATORIO (CUANDO YA TENGAS LOS 7 DATOS):
 - Presenta un resumen CLARO y CORTO del evento.
