@@ -1,7 +1,9 @@
 import { Resend } from "resend";
 
 /**
- * ✅ PROMPT FINAL (cotiza con desglose y preguntas guiadas)
+ * ================================
+ *  PROMPT BASE (NEGOCIO)
+ * ================================
  */
 const SYSTEM_PROMPT = `
 Eres “Asistente de Tony’s DJ”, asistente oficial de servicios de DJ en Puerto Rico.
@@ -26,77 +28,44 @@ FORMA DE HACER LAS PREGUNTAS:
 - Nunca hagas listas.
 - Espera respuesta antes de continuar.
 - PROHIBIDO repetir preguntas ya contestadas.
-- Si falta información, pregunta SOLO por el próximo dato pendiente.
 - Usa ejemplos cuando ayuden al cliente a contestar mejor.
 
-PREGUNTA OBLIGATORIA SOBRE EL LUGAR:
-Cuando preguntes por el lugar del evento, DEBES hacerlo así:
+PREGUNTA SOBRE LUGAR (OBLIGATORIA):
 “¿En qué pueblo será el evento y qué tipo de lugar es?
 Por ejemplo: casa, salón de actividades, negocio, restaurante, hotel, centro comunal, terraza, etc.”
 
-PREGUNTA OBLIGATORIA SOBRE EL TIPO DE ACTIVIDAD:
-Cuando preguntes por el tipo de actividad, DEBES hacerlo así:
+PREGUNTA SOBRE ACTIVIDAD (OBLIGATORIA):
 “¿Qué tipo de actividad será?
 Por ejemplo: cumpleaños, boda, quinceañero, evento corporativo, bautizo, aniversario, actividad familiar, etc.”
 
-SI FALTA ALGÚN DATO:
-- Explica con cortesía que necesitas esa información.
-- No menciones precios aunque el cliente insista.
-
-UBICACIÓN DEL SERVICIO:
-- Base: San Juan (Río Piedras).
+UBICACIÓN:
+- Base en San Juan (Río Piedras).
 
 PRECIO BASE:
 - $350 por 5 horas en área metropolitana.
 
 HORAS ADICIONALES:
-- Más de 5 horas → $25 cada 30 minutos.
+- $25 cada 30 minutos adicionales.
 - Fracciones se redondean hacia arriba.
-- Mostrar como “Tiempo adicional”.
 
-ZONAS DE DISTANCIA:
-ZONA A (SIN cargo):
-San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina,
+ZONAS:
+ZONA A: San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina,
 Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja, Dorado.
 
-ZONA B → $25:
-Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta,
+ZONA B (+$25): Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta,
 Vega Baja, Vega Alta, Naranjito.
 
-ZONA C → $100:
-Arecibo, Barceloneta, Manatí, Humacao, Juncos,
+ZONA C (+$100): Arecibo, Barceloneta, Manatí, Humacao, Juncos,
 San Lorenzo, Fajardo.
 
-ZONA D → $150:
-Ponce, Mayagüez, Aguadilla, Cabo Rojo,
+ZONA D (+$150): Ponce, Mayagüez, Aguadilla, Cabo Rojo,
 Isabela, Hatillo, Jayuya, Utuado, Yauco.
 
 REGLAS ESPECIALES:
+- THE PLACE – CONDADO → Tarifa fija $500 (incluye 5 horas)
+- CENTRO DE CONVENCIONES – CATAÑO → +$100 por complejidad
 
-THE PLACE – CONDADO
-- Solo aplica cuando ya estén los 7 datos.
-- Tarifa fija: $500.
-- No se calculan horas ni distancia.
-- Mostrar como “Tarifa fija”.
-
-CENTRO DE CONVENCIONES – CATAÑO
-- Calcular tarifa regular.
-- Añadir SIEMPRE $100.
-- Mostrar como “Cargo por complejidad del montaje”.
-
-REGLA FINAL DE CÁLCULO:
-TOTAL = precio base
-+ tiempo adicional (si aplica)
-+ cargo por distancia (si aplica)
-+ cargo por complejidad (si aplica).
-
-SALIDA FINAL (FORMATO OBLIGATORIO Y FIJO):
-- ESTE formato debe usarse SIEMPRE.
-- No cambiar textos, orden ni redacción.
-- No explicar cálculos ni usar tablas.
-- Mostrar SOLO los cargos que apliquen.
-
-FORMATO:
+SALIDA FINAL OBLIGATORIA (FORMATO FIJO):
 
 Precio base (incluye 5 horas de servicio): $XXX
 Tiempo adicional: $XXX
@@ -105,23 +74,25 @@ Cargo por complejidad: $XXX
 Total: $XXX
 
 Tony se comunicará contigo para confirmar disponibilidad.
-
-
-ESTILO:
-- Profesional
-- Claro
-- Directo
 `;
 
-
-
+/**
+ * ================================
+ *  CORS
+ * ================================
+ */
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
 
+/**
+ * ================================
+ *  POST /api/chat
+ * ================================
+ */
 export async function POST(req) {
   try {
-    const { message, lead = {}, missing = [], sendEmail = false } = await req.json();
+    const { message, lead = {}, sendEmail = false } = await req.json();
 
     if (!message || typeof message !== "string") {
       return Response.json(
@@ -138,44 +109,72 @@ export async function POST(req) {
       );
     }
 
-    // Prompt dinámico para evitar repetir preguntas
-    const leadSummary = Object.entries(lead)
-      .filter(([_, v]) => v)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(", ");
+    /**
+     * ================================
+     *  CAMPOS OBLIGATORIOS (BACKEND MANDA)
+     * ================================
+     */
+    const REQUIRED_FIELDS = [
+      "name",
+      "date",
+      "startTime",
+      "endTime",
+      "town",
+      "venueType",
+      "eventType",
+      "email",
+      "phone",
+    ];
 
-    const missingList = Array.isArray(missing) ? missing.join(", ") : "";
+    const missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
 
+    /**
+     * ================================
+     *  PROMPT DINÁMICO (ANTI-REPETICIÓN)
+     * ================================
+     */
     const SYSTEM_PROMPT_DYNAMIC = `
-Estado actual (ya recopilado): ${leadSummary || "nada aún"}.
-Datos que faltan (pregunta SOLO el próximo, uno a la vez): ${missingList || "ninguno"}.
+ESTADO ACTUAL DEL LEAD (NO INVENTES):
+${REQUIRED_FIELDS.map(
+  (f) => `${f}: ${lead?.[f] || "❌"}`
+).join("\n")}
 
-Reglas:
-- NO repitas un dato que ya esté en el estado actual.
-- Si faltan datos, pregunta SOLO 1 dato a la vez.
-- Si no falta ninguno, procede a resumir mentalmente y cotizar usando el formato OBLIGATORIO (TOTAL + 2da oración de extras, sin desglose).
+DATOS FALTANTES (ORDENADOS):
+${missing.length ? missing.join(", ") : "NINGUNO"}
 
-REGLA DE CIERRE (OBLIGATORIA):
-Si "Datos que faltan" es "ninguno":
-- Estás OBLIGADO a devolver el TOTAL FINAL ya calculado.
-- NO puedes responder solo con el precio base si hay horas adicionales o si el pueblo no es Zona A.
+REGLAS:
+- NO repitas preguntas ya contestadas.
+- Si hay datos faltantes, pregunta SOLO el PRIMERO.
+- NO hagas más de una pregunta.
+- Si NO falta ninguno:
+  - CIERRA la conversación
+  - CALCULA la cotización
+  - USA EXACTAMENTE el formato final obligatorio
+  - NO hagas preguntas adicionales.
 `;
 
-    // Llamada a OpenAI
+    /**
+     * ================================
+     *  OPENAI CALL
+     * ================================
+     */
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`, // ✅ FIX: template literal correcto (sin escapes)
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
-          { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
+          {
+            role: "system",
+            content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC,
+          },
           { role: "user", content: message },
         ],
+        max_output_tokens: 220,
         truncation: "auto",
-        max_output_tokens: 200, // ✅ más corto para forzar brevedad
       }),
     });
 
@@ -194,106 +193,25 @@ Si "Datos que faltan" es "ninguno":
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-    // ✅ Email (CON la cotización/respuesta del bot) SOLO cuando el lead esté completo
-    if (sendEmail && Array.isArray(missing) && missing.length === 0) {
-      if (!process.env.RESEND_API_KEY) {
-        console.error(
-          "❌ RESEND_API_KEY no está disponible en runtime (revisa Vercel env vars en Production)."
-        );
-      } else if (!process.env.EMAIL_TO) {
-        console.error("❌ EMAIL_TO no está configurado en Vercel env vars.");
-      } else {
-        try {
-          const resend = new Resend(process.env.RESEND_API_KEY);
+    /**
+     * ================================
+     *  EMAILS (SOLO SI LEAD COMPLETO)
+     * ================================
+     */
+    if (sendEmail && missing.length === 0) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
 
-          const botHtml = (text || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\n/g, "<br/>");
-
-          await resend.emails.send({
-            from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-            to: process.env.EMAIL_TO,
-            subject: `Nuevo Evento Tony’s DJ – ${lead?.name || "Cliente"} – ${
-              lead?.date || ""
-            } – ${lead?.town || ""}`,
-            html: `
-              <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto; line-height:1.4">
-                <h2>Cotización / Respuesta enviada al cliente</h2>
-
-                <div style="padding:12px;border:1px solid #eee;border-radius:10px;background:#fafafa">
-                  ${botHtml || "Sin texto"}
-                </div>
-
-                <hr />
-
-                <h3>Datos del lead</h3>
-                <p><b>Nombre:</b> ${lead?.name || ""}</p>
-                <p><b>Fecha:</b> ${lead?.date || ""}</p>
-                <p><b>Horario:</b> ${lead?.startTime || ""} - ${lead?.endTime || ""}</p>
-                <p><b>Lugar:</b> ${lead?.town || ""} (${lead?.venueType || ""})</p>
-                <p><b>Actividad:</b> ${lead?.eventType || ""}</p>
-                <p><b>Email:</b> ${lead?.email || ""}</p>
-                <p><b>Teléfono:</b> ${lead?.phone || ""}</p>
-
-                <p style="margin-top:16px;color:#666;font-size:12px">
-                  Enviado automáticamente desde el chatbot.
-                </p>
-              </div>
-            `,
-          });
-
-          // 📧 Email de confirmación al cliente
-          const customerEmail = (lead?.email || "").trim();
-
-          if (customerEmail) {
-            await resend.emails.send({
-              from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-              to: customerEmail,
-              subject: "Recibimos tu solicitud – Tony’s DJ",
-              html: `
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto; line-height:1.5">
-                  <h2>¡Gracias por escribirnos! 🎧</h2>
-
-                  <p>Hola ${lead?.name || ""},</p>
-
-                  <p>
-                    Recibimos tu solicitud para el evento
-                    <b>${lead?.eventType || ""}</b>
-                    en <b>${lead?.town || ""}</b>
-                    el <b>${lead?.date || ""}</b>.
-                  </p>
-
-                  <p>
-                    En breve Tony se estará comunicando contigo para confirmar
-                    disponibilidad y detalles finales.
-                  </p>
-
-                  <p style="margin-top:16px;">
-                    Gracias,<br/>
-                    <b>Tony’s DJ</b>
-                  </p>
-
-                  <hr/>
-                  <p style="font-size:12px;color:#666">
-                    Este es un correo automático de confirmación.
-                  </p>
-                </div>
-              `,
-            });
-
-            console.log("✅ Email de confirmación enviado al cliente:", customerEmail);
-          }
-
-          console.log("✅ Email (con cotización del bot) enviado a", process.env.EMAIL_TO);
-        } catch (err) {
-          console.error("❌ Error enviando email:", err);
-        }
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM,
+          to: process.env.EMAIL_TO,
+          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
+          html: `<pre>${text}</pre>`,
+        });
+      } catch (err) {
+        console.error("Email error:", err);
       }
     }
-
-    console.log("✅ TERMINÓ PROCESO POST /api/chat");
 
     return Response.json({ reply: text }, { headers: corsHeaders() });
   } catch (err) {
@@ -305,6 +223,11 @@ Si "Datos que faltan" es "ninguno":
   }
 }
 
+/**
+ * ================================
+ *  HEADERS
+ * ================================
+ */
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": process.env.WP_ORIGIN || "*",
