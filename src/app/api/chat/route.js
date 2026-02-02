@@ -62,7 +62,7 @@ ZONA B (+$25): Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta,
 Vega Baja, Vega Alta, Naranjito.
 
 ZONA C (+$100): Arecibo, Barceloneta, Manatí, Humacao, Juncos,
-San Lorenzo, Fajardo.
+San Lorenzo, Fajardo, Guayama.
 
 ZONA D (+$150): Ponce, Mayagüez, Aguadilla, Cabo Rojo,
 Isabela, Hatillo, Jayuya, Utuado, Yauco.
@@ -84,6 +84,71 @@ Tony se comunicará contigo para confirmar disponibilidad.
 
 /**
  * ================================
+ *  Helpers de tiempo (backend)
+ * ================================
+ */
+
+// Convierte "6pm", "6:30 pm", "18:00" a minutos desde 00:00
+function parseTimeToMinutes(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const s = raw.trim().toLowerCase();
+
+  // 24h: 18:00 / 18:30
+  let m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return hh * 60 + mm;
+  }
+
+  // am/pm con o sin minutos: 6pm, 6 pm, 6:30pm, 6:30 pm
+  m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (m) {
+    let hh = Number(m[1]);
+    const mm = m[2] ? Number(m[2]) : 0;
+    const ap = m[3];
+
+    if (hh < 1 || hh > 12 || mm < 0 || mm > 59) return null;
+
+    // 12am = 0, 12pm = 12
+    if (ap === "am") {
+      if (hh === 12) hh = 0;
+    } else {
+      if (hh !== 12) hh += 12;
+    }
+    return hh * 60 + mm;
+  }
+
+  return null;
+}
+
+// Duración en minutos, soporta cruce de medianoche (ej 6pm a 1am)
+function computeDurationMinutes(startRaw, endRaw) {
+  const start = parseTimeToMinutes(startRaw);
+  const end = parseTimeToMinutes(endRaw);
+  if (start == null || end == null) return null;
+
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60; // cruce de medianoche
+  return diff;
+}
+
+// Cargo por tiempo adicional: base cubre 300 min, luego +$25 cada 30 min (redondeo hacia arriba)
+function computeExtraTimeCharge(startRaw, endRaw) {
+  const dur = computeDurationMinutes(startRaw, endRaw);
+  if (dur == null) return { durationMinutes: null, extraTimeCharge: 0 };
+
+  const base = 5 * 60; // 300
+  if (dur <= base) return { durationMinutes: dur, extraTimeCharge: 0 };
+
+  const extraMinutes = dur - base;
+  const blocks30 = Math.ceil(extraMinutes / 30);
+  const extraTimeCharge = blocks30 * 25;
+  return { durationMinutes: dur, extraTimeCharge };
+}
+
+/**
+ * ================================
  *  PARSER BACKEND (ANTI-LOOP)
  * ================================
  */
@@ -102,30 +167,45 @@ function extractFieldsFromMessage(message, lead) {
     if (m) lead.phone = m[0];
   }
 
-  // Horario (6pm a 1am)
+  // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm"
   if (!lead.startTime || !lead.endTime) {
     const m = message.match(
-      /(\d{1,2}\s?(?:am|pm))\s*(?:-|a|hasta)\s*(\d{1,2}\s?(?:am|pm))/i
+      /(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
     );
     if (m) {
-      lead.startTime = lead.startTime || m[1];
-      lead.endTime = lead.endTime || m[2];
+      lead.startTime = lead.startTime || m[1].replace(/\s+/g, "");
+      lead.endTime = lead.endTime || m[2].replace(/\s+/g, "");
     }
   }
 
-  // Tipo de actividad
+  // Horas por separado: "empieza a las 6pm" / "termina 1am"
+  if (!lead.startTime) {
+    const m = message.match(
+      /(empieza|comienza|inicio)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
+    );
+    if (m) lead.startTime = m[2].replace(/\s+/g, "");
+  }
+
+  if (!lead.endTime) {
+    const m = message.match(
+      /(termina|finaliza|se\s*acaba|fin)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
+    );
+    if (m) lead.endTime = m[2].replace(/\s+/g, "");
+  }
+
+  // Tipo de actividad (muy básico, sin complicarlo)
   if (!lead.eventType) {
-    const activities = [
+    const keywords = [
       "cumple",
+      "cumpleaños",
       "boda",
       "quince",
+      "quinceañero",
       "corporativo",
       "bautizo",
       "aniversario",
     ];
-    if (activities.some((a) => text.includes(a))) {
-      lead.eventType = message;
-    }
+    if (keywords.some((k) => text.includes(k))) lead.eventType = message;
   }
 
   return lead;
@@ -156,7 +236,15 @@ export async function POST(req) {
       );
     }
 
-    // 🔥 ACTUALIZAR LEAD CON LO QUE DIJO EL USUARIO
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return Response.json(
+        { error: "OPENAI_API_KEY missing" },
+        { status: 500, headers: corsHeaders() }
+      );
+    }
+
+    // ✅ Actualiza lead con lo último que dijo el usuario
     lead = extractFieldsFromMessage(message, lead);
 
     const REQUIRED_FIELDS = [
@@ -171,64 +259,91 @@ export async function POST(req) {
       "phone",
     ];
 
+    // ✅ Missing recalculado en backend (no confía en frontend)
     const missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
+
+    // ✅ Cálculo determinístico de tiempo adicional (backend)
+    const { durationMinutes, extraTimeCharge } = computeExtraTimeCharge(
+      lead?.startTime,
+      lead?.endTime
+    );
 
     const SYSTEM_PROMPT_DYNAMIC = `
 ESTADO ACTUAL DEL LEAD:
-${REQUIRED_FIELDS.map(
-  (f) => `${f}: ${lead?.[f] || "❌"}`
-).join("\n")}
+${REQUIRED_FIELDS.map((f) => `${f}: ${lead?.[f] || "❌"}`).join("\n")}
 
 DATOS FALTANTES:
 ${missing.length ? missing.join(", ") : "NINGUNO"}
 
-REGLAS:
-- NO repitas preguntas ya contestadas.
-- Si hay datos faltantes, pregunta SOLO el PRIMERO.
+TIEMPO (USAR ESTO, NO INVENTAR):
+- startTime: ${lead?.startTime || "❌"}
+- endTime: ${lead?.endTime || "❌"}
+- durationMinutes: ${durationMinutes == null ? "❌" : durationMinutes}
+- extraTimeCharge: $${extraTimeCharge}
+
+REGLAS ANTI-REPETICIÓN / CIERRE:
+- Si hay datos faltantes, pregunta SOLO el PRIMERO de la lista.
+- PROHIBIDO repetir preguntas ya contestadas.
 - Si NO falta ninguno:
   - CIERRA
   - COTIZA
-  - USA EXACTAMENTE el formato final
+  - En el resumen final, “Tiempo adicional” debe usar EXACTAMENTE: $${extraTimeCharge}
+  - Usa EXACTAMENTE el formato final obligatorio del prompt (mismo orden y texto).
 `;
 
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
-          { role: "system", content: SYSTEM_PROMPT + SYSTEM_PROMPT_DYNAMIC },
+          { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
           { role: "user", content: message },
         ],
-        max_output_tokens: 220,
+        max_output_tokens: 240,
+        truncation: "auto",
       }),
     });
 
     const data = await r.json();
+
+    if (!r.ok) {
+      console.error("OpenAI error:", data);
+      return Response.json(
+        { error: "OpenAI error", details: data },
+        { status: r.status, headers: corsHeaders() }
+      );
+    }
+
     const text =
       data.output_text ||
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-    // 📧 Email solo cuando está completo
+    // 📧 Email solo cuando lead está completo
     if (sendEmail && missing.length === 0) {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      await resend.emails.send({
-        from: process.env.EMAIL_FROM,
-        to: process.env.EMAIL_TO,
-        subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
-        html: `<pre>${text}</pre>`,
-      });
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM,
+          to: process.env.EMAIL_TO,
+          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
+          html: `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap">${text}</pre>`,
+        });
+      } catch (err) {
+        console.error("Email error:", err);
+      }
     }
 
-    return Response.json({ reply: text }, { headers: corsHeaders() });
+    return Response.json({ reply: text, lead, missing }, { headers: corsHeaders() });
   } catch (err) {
     console.error(err);
     return Response.json(
-      { error: "Server error" },
+      { error: "Server error", details: String(err) },
       { status: 500, headers: corsHeaders() }
     );
   }
