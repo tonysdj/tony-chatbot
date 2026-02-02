@@ -72,6 +72,7 @@ REGLAS ESPECIALES:
 - CENTRO DE CONVENCIONES – CATAÑO → +$100 por complejidad
 
 SALIDA FINAL OBLIGATORIA (FORMATO FIJO):
+- Mostrar SOLO los cargos que apliquen.
 
 Precio base (incluye 5 horas de servicio): $XXX
 Tiempo adicional: $XXX
@@ -87,11 +88,26 @@ Tony se comunicará contigo para confirmar disponibilidad.
  *  Helpers de tiempo (backend)
  * ================================
  */
+function normalizeTimeStr(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  return raw.trim().toLowerCase().replace(/\s+/g, "");
+}
 
-// Convierte "6pm", "6:30 pm", "18:00" a minutos desde 00:00
+// Detecta si el mensaje es una hora “sueltita” (6pm, 1am, 18:00, 6:30pm)
+function looksLikeTimeToken(msg) {
+  const s = normalizeTimeStr(msg);
+  if (!s) return false;
+  return (
+    /^(\d{1,2})(am|pm)$/.test(s) ||
+    /^(\d{1,2}):(\d{2})(am|pm)$/.test(s) ||
+    /^(\d{1,2}):(\d{2})$/.test(s)
+  );
+}
+
+// Convierte "6pm", "6:30pm", "18:00" a minutos desde 00:00
 function parseTimeToMinutes(raw) {
   if (!raw || typeof raw !== "string") return null;
-  const s = raw.trim().toLowerCase();
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
 
   // 24h: 18:00 / 18:30
   let m = s.match(/^(\d{1,2}):(\d{2})$/);
@@ -101,8 +117,8 @@ function parseTimeToMinutes(raw) {
     if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return hh * 60 + mm;
   }
 
-  // am/pm con o sin minutos: 6pm, 6 pm, 6:30pm, 6:30 pm
-  m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  // am/pm: 6pm, 6:30pm
+  m = s.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/);
   if (m) {
     let hh = Number(m[1]);
     const mm = m[2] ? Number(m[2]) : 0;
@@ -110,7 +126,6 @@ function parseTimeToMinutes(raw) {
 
     if (hh < 1 || hh > 12 || mm < 0 || mm > 59) return null;
 
-    // 12am = 0, 12pm = 12
     if (ap === "am") {
       if (hh === 12) hh = 0;
     } else {
@@ -122,29 +137,28 @@ function parseTimeToMinutes(raw) {
   return null;
 }
 
-// Duración en minutos, soporta cruce de medianoche (ej 6pm a 1am)
+// Duración en minutos (soporta cruce de medianoche)
 function computeDurationMinutes(startRaw, endRaw) {
   const start = parseTimeToMinutes(startRaw);
   const end = parseTimeToMinutes(endRaw);
   if (start == null || end == null) return null;
 
   let diff = end - start;
-  if (diff < 0) diff += 24 * 60; // cruce de medianoche
+  if (diff < 0) diff += 24 * 60;
   return diff;
 }
 
-// Cargo por tiempo adicional: base cubre 300 min, luego +$25 cada 30 min (redondeo hacia arriba)
+// Cargo por tiempo adicional: base 300 min, +$25 por cada 30 min (redondeo arriba)
 function computeExtraTimeCharge(startRaw, endRaw) {
   const dur = computeDurationMinutes(startRaw, endRaw);
   if (dur == null) return { durationMinutes: null, extraTimeCharge: 0 };
 
-  const base = 5 * 60; // 300
+  const base = 5 * 60;
   if (dur <= base) return { durationMinutes: dur, extraTimeCharge: 0 };
 
   const extraMinutes = dur - base;
   const blocks30 = Math.ceil(extraMinutes / 30);
-  const extraTimeCharge = blocks30 * 25;
-  return { durationMinutes: dur, extraTimeCharge };
+  return { durationMinutes: dur, extraTimeCharge: blocks30 * 25 };
 }
 
 /**
@@ -167,7 +181,7 @@ function extractFieldsFromMessage(message, lead) {
     if (m) lead.phone = m[0];
   }
 
-  // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm"
+  // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm" / "18:00-23:00"
   if (!lead.startTime || !lead.endTime) {
     const m = message.match(
       /(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
@@ -178,7 +192,7 @@ function extractFieldsFromMessage(message, lead) {
     }
   }
 
-  // Horas por separado: "empieza a las 6pm" / "termina 1am"
+  // Horas por separado: "empieza..." / "termina..."
   if (!lead.startTime) {
     const m = message.match(
       /(empieza|comienza|inicio)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
@@ -193,7 +207,7 @@ function extractFieldsFromMessage(message, lead) {
     if (m) lead.endTime = m[2].replace(/\s+/g, "");
   }
 
-  // Tipo de actividad (muy básico, sin complicarlo)
+  // Tipo de actividad (básico)
   if (!lead.eventType) {
     const keywords = [
       "cumple",
@@ -259,8 +273,27 @@ export async function POST(req) {
       "phone",
     ];
 
-    // ✅ Missing recalculado en backend (no confía en frontend)
-    const missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
+    // ✅ Missing recalculado en backend
+    let missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
+
+    /**
+     * ✅ FIX CLAVE:
+     * Si el usuario responde con una hora suelta (6pm / 1am / 18:00 / 6:30pm),
+     * guárdala automáticamente en el campo de horario que falte.
+     */
+    if (looksLikeTimeToken(message)) {
+      const t = normalizeTimeStr(message);
+
+      // si faltan ambas, primero llenamos startTime
+      if (!lead.startTime) {
+        lead.startTime = t;
+      } else if (!lead.endTime) {
+        lead.endTime = t;
+      }
+
+      // recalcula missing después de asignar
+      missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
+    }
 
     // ✅ Cálculo determinístico de tiempo adicional (backend)
     const { durationMinutes, extraTimeCharge } = computeExtraTimeCharge(
@@ -287,7 +320,7 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
 - Si NO falta ninguno:
   - CIERRA
   - COTIZA
-  - En el resumen final, “Tiempo adicional” debe usar EXACTAMENTE: $${extraTimeCharge}
+  - Si extraTimeCharge > 0, DEBES mostrar la línea: "Tiempo adicional: $${extraTimeCharge}"
   - Usa EXACTAMENTE el formato final obligatorio del prompt (mismo orden y texto).
 `;
 
