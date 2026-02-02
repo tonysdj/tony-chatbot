@@ -90,16 +90,22 @@ TOTAL = precio base
 + cargo por distancia (si aplica)
 + cargo por complejidad (si aplica).
 
-SALIDA FINAL (FORMATO OBLIGATORIO):
-Mostrar SOLO los cargos que apliquen:
+SALIDA FINAL (FORMATO OBLIGATORIO Y FIJO):
+- ESTE formato debe usarse SIEMPRE.
+- No cambiar textos, orden ni redacción.
+- No explicar cálculos ni usar tablas.
+- Mostrar SOLO los cargos que apliquen.
 
-Precio base: $XXX
+FORMATO:
+
+Precio base (incluye 5 horas de servicio): $XXX
 Tiempo adicional: $XXX
 Cargo por distancia: $XXX
 Cargo por complejidad: $XXX
 Total: $XXX
 
 Tony se comunicará contigo para confirmar disponibilidad.
+
 
 ESTILO:
 - Profesional
