@@ -23,23 +23,29 @@ INFORMACIÓN OBLIGATORIA PARA COTIZAR (TODOS REQUERIDOS):
 6) Correo electrónico (OBLIGATORIO, sin excepción)
 7) Número de teléfono
 
+REGLA CRÍTICA SOBRE EL HORARIO:
+- DEBES obtener hora de inicio Y hora de fin.
+- Sin ambas horas NO se puede cotizar.
+- Se usan para calcular horas adicionales.
+- Si falta una, pide SOLO la que falte.
+
 FORMA DE HACER LAS PREGUNTAS:
 - UNA pregunta a la vez.
 - Nunca hagas listas.
 - Espera respuesta antes de continuar.
 - PROHIBIDO repetir preguntas ya contestadas.
-- Usa ejemplos cuando ayuden al cliente a contestar mejor.
+- Usa ejemplos cuando ayuden al cliente.
 
-PREGUNTA SOBRE LUGAR (OBLIGATORIA):
+PREGUNTA SOBRE LUGAR:
 “¿En qué pueblo será el evento y qué tipo de lugar es?
 Por ejemplo: casa, salón de actividades, negocio, restaurante, hotel, centro comunal, terraza, etc.”
 
-PREGUNTA SOBRE ACTIVIDAD (OBLIGATORIA):
+PREGUNTA SOBRE ACTIVIDAD:
 “¿Qué tipo de actividad será?
 Por ejemplo: cumpleaños, boda, quinceañero, evento corporativo, bautizo, aniversario, actividad familiar, etc.”
 
 UBICACIÓN:
-- Base en San Juan (Río Piedras).
+- Base: San Juan (Río Piedras).
 
 PRECIO BASE:
 - $350 por 5 horas en área metropolitana.
@@ -78,6 +84,55 @@ Tony se comunicará contigo para confirmar disponibilidad.
 
 /**
  * ================================
+ *  PARSER BACKEND (ANTI-LOOP)
+ * ================================
+ */
+function extractFieldsFromMessage(message, lead) {
+  const text = message.toLowerCase();
+
+  // Email
+  if (!lead.email) {
+    const m = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    if (m) lead.email = m[0];
+  }
+
+  // Teléfono PR
+  if (!lead.phone) {
+    const m = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
+    if (m) lead.phone = m[0];
+  }
+
+  // Horario (6pm a 1am)
+  if (!lead.startTime || !lead.endTime) {
+    const m = message.match(
+      /(\d{1,2}\s?(?:am|pm))\s*(?:-|a|hasta)\s*(\d{1,2}\s?(?:am|pm))/i
+    );
+    if (m) {
+      lead.startTime = lead.startTime || m[1];
+      lead.endTime = lead.endTime || m[2];
+    }
+  }
+
+  // Tipo de actividad
+  if (!lead.eventType) {
+    const activities = [
+      "cumple",
+      "boda",
+      "quince",
+      "corporativo",
+      "bautizo",
+      "aniversario",
+    ];
+    if (activities.some((a) => text.includes(a))) {
+      lead.eventType = message;
+    }
+  }
+
+  return lead;
+}
+
+/**
+ * ================================
  *  CORS
  * ================================
  */
@@ -92,28 +147,18 @@ export async function OPTIONS() {
  */
 export async function POST(req) {
   try {
-    const { message, lead = {}, sendEmail = false } = await req.json();
+    let { message, lead = {}, sendEmail = false } = await req.json();
 
-    if (!message || typeof message !== "string") {
+    if (!message) {
       return Response.json(
         { error: "Missing message" },
         { status: 400, headers: corsHeaders() }
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return Response.json(
-        { error: "OPENAI_API_KEY missing" },
-        { status: 500, headers: corsHeaders() }
-      );
-    }
+    // 🔥 ACTUALIZAR LEAD CON LO QUE DIJO EL USUARIO
+    lead = extractFieldsFromMessage(message, lead);
 
-    /**
-     * ================================
-     *  CAMPOS OBLIGATORIOS (BACKEND MANDA)
-     * ================================
-     */
     const REQUIRED_FIELDS = [
       "name",
       "date",
@@ -128,96 +173,62 @@ export async function POST(req) {
 
     const missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
 
-    /**
-     * ================================
-     *  PROMPT DINÁMICO (ANTI-REPETICIÓN)
-     * ================================
-     */
     const SYSTEM_PROMPT_DYNAMIC = `
-ESTADO ACTUAL DEL LEAD (NO INVENTES):
+ESTADO ACTUAL DEL LEAD:
 ${REQUIRED_FIELDS.map(
   (f) => `${f}: ${lead?.[f] || "❌"}`
 ).join("\n")}
 
-DATOS FALTANTES (ORDENADOS):
+DATOS FALTANTES:
 ${missing.length ? missing.join(", ") : "NINGUNO"}
 
 REGLAS:
 - NO repitas preguntas ya contestadas.
 - Si hay datos faltantes, pregunta SOLO el PRIMERO.
-- NO hagas más de una pregunta.
 - Si NO falta ninguno:
-  - CIERRA la conversación
-  - CALCULA la cotización
-  - USA EXACTAMENTE el formato final obligatorio
-  - NO hagas preguntas adicionales.
+  - CIERRA
+  - COTIZA
+  - USA EXACTAMENTE el formato final
 `;
 
-    /**
-     * ================================
-     *  OPENAI CALL
-     * ================================
-     */
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
-          {
-            role: "system",
-            content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC,
-          },
+          { role: "system", content: SYSTEM_PROMPT + SYSTEM_PROMPT_DYNAMIC },
           { role: "user", content: message },
         ],
         max_output_tokens: 220,
-        truncation: "auto",
       }),
     });
 
     const data = await r.json();
-
-    if (!r.ok) {
-      console.error("OpenAI error:", data);
-      return Response.json(
-        { error: "OpenAI error", details: data },
-        { status: r.status, headers: corsHeaders() }
-      );
-    }
-
     const text =
       data.output_text ||
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-    /**
-     * ================================
-     *  EMAILS (SOLO SI LEAD COMPLETO)
-     * ================================
-     */
+    // 📧 Email solo cuando está completo
     if (sendEmail && missing.length === 0) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-
-        await resend.emails.send({
-          from: process.env.EMAIL_FROM,
-          to: process.env.EMAIL_TO,
-          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
-          html: `<pre>${text}</pre>`,
-        });
-      } catch (err) {
-        console.error("Email error:", err);
-      }
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM,
+        to: process.env.EMAIL_TO,
+        subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
+        html: `<pre>${text}</pre>`,
+      });
     }
 
     return Response.json({ reply: text }, { headers: corsHeaders() });
   } catch (err) {
-    console.error("Server error:", err);
+    console.error(err);
     return Response.json(
-      { error: "Server error", details: String(err) },
+      { error: "Server error" },
       { status: 500, headers: corsHeaders() }
     );
   }
