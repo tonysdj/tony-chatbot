@@ -2,21 +2,19 @@ import { Resend } from "resend";
 
 /**
  * ================================
- *  PROMPT BASE (NEGOCIO)
+ *  PROMPT BASE
  * ================================
  */
 const SYSTEM_PROMPT = `
 Eres “Asistente de Tony’s DJ”, asistente oficial de servicios de DJ en Puerto Rico.
 Hablas en español boricua, con tono profesional, claro y amable.
 
-REGLA CRÍTICA:
-❌ NO puedes dar precios ni calcular costos
-❌ SOLO puedes MOSTRAR los valores que te da el backend
-
-FORMA DE HACER LAS PREGUNTAS:
-- UNA pregunta a la vez
-- NO repetir preguntas ya contestadas
-- Si falta algo, pregunta SOLO eso
+REGLAS CRÍTICAS:
+❌ NO calcular precios
+❌ NO inventar cantidades
+✅ SOLO mostrar los valores que te da el backend
+- Una pregunta a la vez
+- No repetir preguntas ya contestadas
 `;
 
 /**
@@ -67,9 +65,11 @@ function computeDurationMinutes(start, end) {
 
 function computeExtraTimeCharge(start, end) {
   const dur = computeDurationMinutes(start, end);
-  if (!dur) return { durationMinutes: null, extraTimeCharge: 0 };
-  const base = 300;
+  if (dur == null) return { durationMinutes: null, extraTimeCharge: 0 };
+
+  const base = 300; // 5 horas
   if (dur <= base) return { durationMinutes: dur, extraTimeCharge: 0 };
+
   return {
     durationMinutes: dur,
     extraTimeCharge: Math.ceil((dur - base) / 30) * 25,
@@ -90,14 +90,34 @@ function computeZoneCharge(town = "") {
   if (["arecibo","barceloneta","manatí","humacao","juncos","san lorenzo","fajardo","guayama"].some(z => t.includes(z))) return 100;
   if (["ponce","mayagüez","aguadilla","cabo rojo","isabela","hatillo","jayuya","utuado","yauco"].some(z => t.includes(z))) return 150;
 
-  return 0;
+  return 0; // área metro
 }
 
 function computeComplexityCharge(venue = "") {
   const v = venue.toLowerCase();
-  if (v.includes("the place")) return 500;
+  if (v.includes("the place")) return 500; // tarifa fija
   if (v.includes("centro de convenciones")) return 100;
   return 0;
+}
+
+/**
+ * ================================
+ *  CORS
+ * ================================
+ */
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": process.env.WP_ORIGIN || "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(),
+  });
 }
 
 /**
@@ -106,26 +126,50 @@ function computeComplexityCharge(venue = "") {
  * ================================
  */
 export async function POST(req) {
-  const { message, lead = {} } = await req.json();
+  try {
+    const { message, lead = {} } = await req.json();
 
-  if (looksLikeTimeToken(message)) {
-    if (!lead.startTime) lead.startTime = message;
-    else if (!lead.endTime) lead.endTime = message;
-  }
+    if (!message) {
+      return new Response(
+        JSON.stringify({ error: "Missing message" }),
+        { status: 400, headers: corsHeaders() }
+      );
+    }
 
-  const REQUIRED = ["name","date","startTime","endTime","town","venueType","eventType","email","phone"];
-  const missing = REQUIRED.filter(f => !lead[f]);
+    // Manejo de horas sueltas
+    if (looksLikeTimeToken(message)) {
+      if (!lead.startTime) lead.startTime = normalizeTimeStr(message);
+      else if (!lead.endTime) lead.endTime = normalizeTimeStr(message);
+    }
 
-  const { extraTimeCharge } = computeExtraTimeCharge(lead.startTime, lead.endTime);
-  const zoneCharge = computeZoneCharge(lead.town);
-  const complexityCharge = computeComplexityCharge(lead.venueType);
+    const REQUIRED = [
+      "name",
+      "date",
+      "startTime",
+      "endTime",
+      "town",
+      "venueType",
+      "eventType",
+      "email",
+      "phone",
+    ];
 
-  const total =
-    complexityCharge === 500
-      ? 500 + extraTimeCharge
-      : BASE_PRICE + extraTimeCharge + zoneCharge + complexityCharge;
+    const missing = REQUIRED.filter((f) => !lead[f]);
 
-  const SYSTEM_PROMPT_DYNAMIC = `
+    // Cálculos backend
+    const { extraTimeCharge } = computeExtraTimeCharge(
+      lead.startTime,
+      lead.endTime
+    );
+    const zoneCharge = computeZoneCharge(lead.town);
+    const complexityCharge = computeComplexityCharge(lead.venueType);
+
+    const total =
+      complexityCharge === 500
+        ? 500 + extraTimeCharge
+        : BASE_PRICE + extraTimeCharge + zoneCharge + complexityCharge;
+
+    const SYSTEM_PROMPT_DYNAMIC = `
 ESTADO DEL LEAD:
 ${REQUIRED.map(f => `${f}: ${lead[f] || "❌"}`).join("\n")}
 
@@ -141,27 +185,44 @@ REGLA:
 ❌ NO cambiar cantidades
 `;
 
-  const r = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      input: [
-        { role: "system", content: SYSTEM_PROMPT + SYSTEM_PROMPT_DYNAMIC },
-        { role: "user", content: message },
-      ],
-      max_output_tokens: 250,
-    }),
-  });
+    const r = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        input: [
+          { role: "system", content: SYSTEM_PROMPT + SYSTEM_PROMPT_DYNAMIC },
+          { role: "user", content: message },
+        ],
+        max_output_tokens: 300,
+      }),
+    });
 
-  const data = await r.json();
-  const reply =
-    data.output_text ||
-    data?.output?.[0]?.content?.map(c => c.text).join("") ||
-    "";
+    const data = await r.json();
 
-  return Response.json({ reply, lead, total });
+    const reply =
+      data.output_text ||
+      data?.output?.[0]?.content?.map(c => c.text).join("") ||
+      "";
+
+    return new Response(
+      JSON.stringify({ reply, lead, total, missing }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders(),
+        },
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    return new Response(
+      JSON.stringify({ error: "Server error", details: String(err) }),
+      { status: 500, headers: corsHeaders() }
+    );
+  }
 }
