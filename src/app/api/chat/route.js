@@ -10,82 +10,18 @@ Eres “Asistente de Tony’s DJ”, asistente oficial de servicios de DJ en Pue
 Hablas en español boricua, con tono profesional, claro y amable.
 
 REGLA CRÍTICA:
-❌ NO puedes dar precios, rangos ni cantidades
-❌ NO puedes insinuar costos
-HASTA que el cliente provea TODA la información obligatoria.
-
-INFORMACIÓN OBLIGATORIA PARA COTIZAR (TODOS REQUERIDOS):
-1) Nombre completo
-2) Fecha del evento
-3) Horario del evento (hora inicio y fin)
-4) Lugar del evento (pueblo y tipo de lugar)
-5) Tipo de actividad
-6) Correo electrónico (OBLIGATORIO, sin excepción)
-7) Número de teléfono
-
-REGLA CRÍTICA SOBRE EL HORARIO:
-- DEBES obtener hora de inicio Y hora de fin.
-- Sin ambas horas NO se puede cotizar.
-- Se usan para calcular horas adicionales.
-- Si falta una, pide SOLO la que falte.
+❌ NO puedes dar precios ni calcular costos
+❌ SOLO puedes MOSTRAR los valores que te da el backend
 
 FORMA DE HACER LAS PREGUNTAS:
-- UNA pregunta a la vez.
-- Nunca hagas listas.
-- Espera respuesta antes de continuar.
-- PROHIBIDO repetir preguntas ya contestadas.
-- Usa ejemplos cuando ayuden al cliente.
-
-PREGUNTA SOBRE LUGAR:
-“¿En qué pueblo será el evento y qué tipo de lugar es?
-Por ejemplo: casa, salón de actividades, negocio, restaurante, hotel, centro comunal, terraza, etc.”
-
-PREGUNTA SOBRE ACTIVIDAD:
-“¿Qué tipo de actividad será?
-Por ejemplo: cumpleaños, boda, quinceañero, evento corporativo, bautizo, aniversario, actividad familiar, etc.”
-
-UBICACIÓN:
-- Base: San Juan (Río Piedras).
-
-PRECIO BASE:
-- $350 por 5 horas en área metropolitana.
-
-HORAS ADICIONALES:
-- $25 cada 30 minutos adicionales.
-- Fracciones se redondean hacia arriba.
-
-ZONAS:
-ZONA A: San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina,
-Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja, Dorado.
-
-ZONA B (+$25): Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta,
-Vega Baja, Vega Alta, Naranjito.
-
-ZONA C (+$100): Arecibo, Barceloneta, Manatí, Humacao, Juncos,
-San Lorenzo, Fajardo, Guayama.
-
-ZONA D (+$150): Ponce, Mayagüez, Aguadilla, Cabo Rojo,
-Isabela, Hatillo, Jayuya, Utuado, Yauco.
-
-REGLAS ESPECIALES:
-- THE PLACE – CONDADO → Tarifa fija $500 (incluye 5 horas)
-- CENTRO DE CONVENCIONES – CATAÑO → +$100 por complejidad
-
-SALIDA FINAL OBLIGATORIA (FORMATO FIJO):
-- Mostrar SOLO los cargos que apliquen.
-
-Precio base (incluye 5 horas de servicio): $XXX
-Tiempo adicional: $XXX
-Cargo por distancia: $XXX
-Cargo por complejidad: $XXX
-Total: $XXX
-
-Tony se comunicará contigo para confirmar disponibilidad.
+- UNA pregunta a la vez
+- NO repetir preguntas ya contestadas
+- Si falta algo, pregunta SOLO eso
 `;
 
 /**
  * ================================
- *  Helpers de tiempo (backend)
+ *  HELPERS DE TIEMPO
  * ================================
  */
 function normalizeTimeStr(raw) {
@@ -93,10 +29,8 @@ function normalizeTimeStr(raw) {
   return raw.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-// Detecta si el mensaje es una hora “sueltita” (6pm, 1am, 18:00, 6:30pm)
 function looksLikeTimeToken(msg) {
   const s = normalizeTimeStr(msg);
-  if (!s) return false;
   return (
     /^(\d{1,2})(am|pm)$/.test(s) ||
     /^(\d{1,2}):(\d{2})(am|pm)$/.test(s) ||
@@ -104,134 +38,66 @@ function looksLikeTimeToken(msg) {
   );
 }
 
-// Convierte "6pm", "6:30pm", "18:00" a minutos desde 00:00
 function parseTimeToMinutes(raw) {
-  if (!raw || typeof raw !== "string") return null;
-  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  if (!raw) return null;
+  const s = raw.toLowerCase();
 
-  // 24h: 18:00 / 18:30
   let m = s.match(/^(\d{1,2}):(\d{2})$/);
-  if (m) {
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return hh * 60 + mm;
-  }
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
 
-  // am/pm: 6pm, 6:30pm
   m = s.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/);
-  if (m) {
-    let hh = Number(m[1]);
-    const mm = m[2] ? Number(m[2]) : 0;
-    const ap = m[3];
+  if (!m) return null;
 
-    if (hh < 1 || hh > 12 || mm < 0 || mm > 59) return null;
+  let h = Number(m[1]);
+  const min = m[2] ? Number(m[2]) : 0;
+  if (m[3] === "pm" && h !== 12) h += 12;
+  if (m[3] === "am" && h === 12) h = 0;
 
-    if (ap === "am") {
-      if (hh === 12) hh = 0;
-    } else {
-      if (hh !== 12) hh += 12;
-    }
-    return hh * 60 + mm;
-  }
-
-  return null;
+  return h * 60 + min;
 }
 
-// Duración en minutos (soporta cruce de medianoche)
-function computeDurationMinutes(startRaw, endRaw) {
-  const start = parseTimeToMinutes(startRaw);
-  const end = parseTimeToMinutes(endRaw);
-  if (start == null || end == null) return null;
-
-  let diff = end - start;
-  if (diff < 0) diff += 24 * 60;
+function computeDurationMinutes(start, end) {
+  const s = parseTimeToMinutes(start);
+  const e = parseTimeToMinutes(end);
+  if (s == null || e == null) return null;
+  let diff = e - s;
+  if (diff < 0) diff += 1440;
   return diff;
 }
 
-// Cargo por tiempo adicional: base 300 min, +$25 por cada 30 min (redondeo arriba)
-function computeExtraTimeCharge(startRaw, endRaw) {
-  const dur = computeDurationMinutes(startRaw, endRaw);
-  if (dur == null) return { durationMinutes: null, extraTimeCharge: 0 };
-
-  const base = 5 * 60;
+function computeExtraTimeCharge(start, end) {
+  const dur = computeDurationMinutes(start, end);
+  if (!dur) return { durationMinutes: null, extraTimeCharge: 0 };
+  const base = 300;
   if (dur <= base) return { durationMinutes: dur, extraTimeCharge: 0 };
-
-  const extraMinutes = dur - base;
-  const blocks30 = Math.ceil(extraMinutes / 30);
-  return { durationMinutes: dur, extraTimeCharge: blocks30 * 25 };
+  return {
+    durationMinutes: dur,
+    extraTimeCharge: Math.ceil((dur - base) / 30) * 25,
+  };
 }
 
 /**
  * ================================
- *  PARSER BACKEND (ANTI-LOOP)
+ *  PRECIOS (BACKEND)
  * ================================
  */
-function extractFieldsFromMessage(message, lead) {
-  const text = message.toLowerCase();
+const BASE_PRICE = 350;
 
-  // Email
-  if (!lead.email) {
-    const m = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    if (m) lead.email = m[0];
-  }
+function computeZoneCharge(town = "") {
+  const t = town.toLowerCase();
 
-  // Teléfono PR
-  if (!lead.phone) {
-    const m = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
-    if (m) lead.phone = m[0];
-  }
+  if (["caguas","gurabo","canóvanas","loíza","río grande","toa alta","vega baja","vega alta","naranjito"].some(z => t.includes(z))) return 25;
+  if (["arecibo","barceloneta","manatí","humacao","juncos","san lorenzo","fajardo","guayama"].some(z => t.includes(z))) return 100;
+  if (["ponce","mayagüez","aguadilla","cabo rojo","isabela","hatillo","jayuya","utuado","yauco"].some(z => t.includes(z))) return 150;
 
-  // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm" / "18:00-23:00"
-  if (!lead.startTime || !lead.endTime) {
-    const m = message.match(
-      /(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) {
-      lead.startTime = lead.startTime || m[1].replace(/\s+/g, "");
-      lead.endTime = lead.endTime || m[2].replace(/\s+/g, "");
-    }
-  }
-
-  // Horas por separado: "empieza..." / "termina..."
-  if (!lead.startTime) {
-    const m = message.match(
-      /(empieza|comienza|inicio)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) lead.startTime = m[2].replace(/\s+/g, "");
-  }
-
-  if (!lead.endTime) {
-    const m = message.match(
-      /(termina|finaliza|se\s*acaba|fin)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) lead.endTime = m[2].replace(/\s+/g, "");
-  }
-
-  // Tipo de actividad (básico)
-  if (!lead.eventType) {
-    const keywords = [
-      "cumple",
-      "cumpleaños",
-      "boda",
-      "quince",
-      "quinceañero",
-      "corporativo",
-      "bautizo",
-      "aniversario",
-    ];
-    if (keywords.some((k) => text.includes(k))) lead.eventType = message;
-  }
-
-  return lead;
+  return 0;
 }
 
-/**
- * ================================
- *  CORS
- * ================================
- */
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders() });
+function computeComplexityCharge(venue = "") {
+  const v = venue.toLowerCase();
+  if (v.includes("the place")) return 500;
+  if (v.includes("centro de convenciones")) return 100;
+  return 0;
 }
 
 /**
@@ -240,157 +106,62 @@ export async function OPTIONS() {
  * ================================
  */
 export async function POST(req) {
-  try {
-    let { message, lead = {}, sendEmail = false } = await req.json();
+  const { message, lead = {} } = await req.json();
 
-    if (!message) {
-      return Response.json(
-        { error: "Missing message" },
-        { status: 400, headers: corsHeaders() }
-      );
-    }
+  if (looksLikeTimeToken(message)) {
+    if (!lead.startTime) lead.startTime = message;
+    else if (!lead.endTime) lead.endTime = message;
+  }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return Response.json(
-        { error: "OPENAI_API_KEY missing" },
-        { status: 500, headers: corsHeaders() }
-      );
-    }
+  const REQUIRED = ["name","date","startTime","endTime","town","venueType","eventType","email","phone"];
+  const missing = REQUIRED.filter(f => !lead[f]);
 
-    // ✅ Actualiza lead con lo último que dijo el usuario
-    lead = extractFieldsFromMessage(message, lead);
+  const { extraTimeCharge } = computeExtraTimeCharge(lead.startTime, lead.endTime);
+  const zoneCharge = computeZoneCharge(lead.town);
+  const complexityCharge = computeComplexityCharge(lead.venueType);
 
-    const REQUIRED_FIELDS = [
-      "name",
-      "date",
-      "startTime",
-      "endTime",
-      "town",
-      "venueType",
-      "eventType",
-      "email",
-      "phone",
-    ];
+  const total =
+    complexityCharge === 500
+      ? 500 + extraTimeCharge
+      : BASE_PRICE + extraTimeCharge + zoneCharge + complexityCharge;
 
-    // ✅ Missing recalculado en backend
-    let missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
+  const SYSTEM_PROMPT_DYNAMIC = `
+ESTADO DEL LEAD:
+${REQUIRED.map(f => `${f}: ${lead[f] || "❌"}`).join("\n")}
 
-    /**
-     * ✅ FIX CLAVE:
-     * Si el usuario responde con una hora suelta (6pm / 1am / 18:00 / 6:30pm),
-     * guárdala automáticamente en el campo de horario que falte.
-     */
-    if (looksLikeTimeToken(message)) {
-      const t = normalizeTimeStr(message);
+CÁLCULOS OFICIALES:
+Precio base: $${BASE_PRICE}
+Tiempo adicional: $${extraTimeCharge}
+Cargo por distancia: $${zoneCharge}
+Cargo por complejidad: $${complexityCharge}
+TOTAL FINAL: $${total}
 
-      // si faltan ambas, primero llenamos startTime
-      if (!lead.startTime) {
-        lead.startTime = t;
-      } else if (!lead.endTime) {
-        lead.endTime = t;
-      }
-
-      // recalcula missing después de asignar
-      missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
-    }
-
-    // ✅ Cálculo determinístico de tiempo adicional (backend)
-    const { durationMinutes, extraTimeCharge } = computeExtraTimeCharge(
-      lead?.startTime,
-      lead?.endTime
-    );
-
-    const SYSTEM_PROMPT_DYNAMIC = `
-ESTADO ACTUAL DEL LEAD:
-${REQUIRED_FIELDS.map((f) => `${f}: ${lead?.[f] || "❌"}`).join("\n")}
-
-DATOS FALTANTES:
-${missing.length ? missing.join(", ") : "NINGUNO"}
-
-TIEMPO (USAR ESTO, NO INVENTAR):
-- startTime: ${lead?.startTime || "❌"}
-- endTime: ${lead?.endTime || "❌"}
-- durationMinutes: ${durationMinutes == null ? "❌" : durationMinutes}
-- extraTimeCharge: $${extraTimeCharge}
-
-REGLAS ANTI-REPETICIÓN / CIERRE:
-- Si hay datos faltantes, pregunta SOLO el PRIMERO de la lista.
-- PROHIBIDO repetir preguntas ya contestadas.
-- Si NO falta ninguno:
-  - CIERRA
-  - COTIZA
-  - Si extraTimeCharge > 0, DEBES mostrar la línea: "Tiempo adicional: $${extraTimeCharge}"
-  - Usa EXACTAMENTE el formato final obligatorio del prompt (mismo orden y texto).
+REGLA:
+❌ NO recalcular
+❌ NO cambiar cantidades
 `;
 
-    const r = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        input: [
-          { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
-          { role: "user", content: message },
-        ],
-        max_output_tokens: 240,
-        truncation: "auto",
-      }),
-    });
+  const r = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      input: [
+        { role: "system", content: SYSTEM_PROMPT + SYSTEM_PROMPT_DYNAMIC },
+        { role: "user", content: message },
+      ],
+      max_output_tokens: 250,
+    }),
+  });
 
-    const data = await r.json();
+  const data = await r.json();
+  const reply =
+    data.output_text ||
+    data?.output?.[0]?.content?.map(c => c.text).join("") ||
+    "";
 
-    if (!r.ok) {
-      console.error("OpenAI error:", data);
-      return Response.json(
-        { error: "OpenAI error", details: data },
-        { status: r.status, headers: corsHeaders() }
-      );
-    }
-
-    const text =
-      data.output_text ||
-      data?.output?.[0]?.content?.map((c) => c.text).join("") ||
-      "";
-
-    // 📧 Email solo cuando lead está completo
-    if (sendEmail && missing.length === 0) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-
-        await resend.emails.send({
-          from: process.env.EMAIL_FROM,
-          to: process.env.EMAIL_TO,
-          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
-          html: `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap">${text}</pre>`,
-        });
-      } catch (err) {
-        console.error("Email error:", err);
-      }
-    }
-
-    return Response.json({ reply: text, lead, missing }, { headers: corsHeaders() });
-  } catch (err) {
-    console.error(err);
-    return Response.json(
-      { error: "Server error", details: String(err) },
-      { status: 500, headers: corsHeaders() }
-    );
-  }
-}
-
-/**
- * ================================
- *  HEADERS
- * ================================
- */
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": process.env.WP_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+  return Response.json({ reply, lead, total });
 }
