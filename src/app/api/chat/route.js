@@ -123,6 +123,48 @@ function computeExtraTimeCharge(startRaw, endRaw) {
 function extractFieldsFromMessage(message, lead) {
   const text = message.toLowerCase();
 
+  // Email
+  const emailMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (emailMatch) lead.email = emailMatch[0];
+
+  // Teléfono PR
+  const phoneMatch = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
+  if (phoneMatch) lead.phone = phoneMatch[0];
+
+  // Nombre simple
+  if (!lead.name && /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,40}$/.test(message.trim())) {
+    const words = message.trim().split(" ");
+    if (words.length <= 3) {
+      lead.name = message.trim();
+    }
+  }
+
+  // Fecha simple (15/03/2026 o 15-03-2026)
+  const dateMatch = message.match(/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/);
+  if (dateMatch) {
+    lead.date = dateMatch[0];
+  }
+
+  // Detección de pueblo
+  const towns = [
+    "san juan","caguas","carolina","trujillo alto","guaynabo","bayamon",
+    "cataño","catano","toa baja","toa alta","dorado","vega baja","vega alta",
+    "arecibo","manati","humacao","ponce","mayaguez","aguadilla"
+  ];
+
+  for (const t of towns) {
+    if (text.includes(t)) {
+      lead.town = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      break;
+    }
+  }
+
+  return lead;
+}
+
+
+  const text = message.toLowerCase();
+
   const emailMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   if (emailMatch) lead.email = emailMatch[0];
 
