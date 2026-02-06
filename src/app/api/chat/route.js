@@ -375,6 +375,31 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
 // 💾 Guardar lead en Supabase cuando esté completo
 if (missing.length === 0) {
   try {
+    // Calcular precio final
+    let precioFinal = 350 + extraTimeCharge;
+
+    // Cargo por distancia
+    const town = (lead.town || "").toLowerCase();
+
+    const zonaB = ["caguas","gurabo","canóvanas","loíza","río grande","toa alta","vega baja","vega alta","naranjito"];
+    const zonaC = ["arecibo","barceloneta","manatí","humacao","juncos","san lorenzo","fajardo","guayama"];
+    const zonaD = ["ponce","mayagüez","aguadilla","cabo rojo","isabela","hatillo","jayuya","utuado","yauco"];
+
+    if (zonaB.includes(town)) precioFinal += 25;
+    if (zonaC.includes(town)) precioFinal += 100;
+    if (zonaD.includes(town)) precioFinal += 150;
+
+    // Reglas especiales
+    const lugarCompleto = `${lead.town || ""} ${lead.venueType || ""}`.toLowerCase();
+
+    if (lugarCompleto.includes("the place") && lugarCompleto.includes("condado")) {
+      precioFinal = 500;
+    }
+
+    if (lugarCompleto.includes("centro de convenciones") && lugarCompleto.includes("cataño")) {
+      precioFinal += 100;
+    }
+
     await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/save-lead`, {
       method: "POST",
       headers: {
@@ -388,9 +413,7 @@ if (missing.length === 0) {
         tipo_evento: lead.eventType,
         email: lead.email,
         telefono: lead.phone,
-        precio_cotizado: extraTimeCharge
-          ? 350 + extraTimeCharge
-          : 350,
+        precio_cotizado: precioFinal,
         duracion_horas: durationMinutes
           ? (durationMinutes / 60).toFixed(1)
           : null,
@@ -401,8 +424,6 @@ if (missing.length === 0) {
     console.error("Error guardando lead:", e);
   }
 }
-
-
     return Response.json({ reply: text, lead, missing }, { headers: corsHeaders() });
   } catch (err) {
     console.error(err);
@@ -412,6 +433,8 @@ if (missing.length === 0) {
     );
   }
 }
+
+
 
 /**
  * ================================
