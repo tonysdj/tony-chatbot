@@ -1,4 +1,8 @@
+import { Resend } from "resend";
+
 export const runtime = "nodejs";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const STEPS = [
   { key: "name", question: "¿Cuál es tu nombre completo?" },
@@ -69,7 +73,6 @@ function calculateQuote(lead) {
   return { price, hours, breakdown };
 }
 
-// CORS
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -89,7 +92,6 @@ export async function POST(req) {
   try {
     const { lead = {} } = await req.json();
 
-    // buscar siguiente paso
     const nextStep = STEPS.find(step => !lead[step.key]);
 
     if (nextStep) {
@@ -99,11 +101,11 @@ export async function POST(req) {
       );
     }
 
-    // todo completo → calcular
     const quote = calculateQuote(lead);
 
     const origin = req.nextUrl?.origin || new URL(req.url).origin;
 
+    // Guardar en Supabase
     await fetch(`${origin}/api/save-lead`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,6 +121,24 @@ export async function POST(req) {
         duracion_horas: quote.hours,
         notas_cotizacion: quote.breakdown
       }),
+    });
+
+    // Enviar email
+    await resend.emails.send({
+      from: "Tony’s DJ <cotizaciones@tonysdjpr.com>",
+      to: [lead.email],
+      subject: "Tu cotización de Tony’s DJ",
+      html: `
+        <h2>¡Gracias por tu interés en Tony’s DJ!</h2>
+        <p><strong>Fecha:</strong> ${lead.date}</p>
+        <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
+        <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
+        <p><strong>Actividad:</strong> ${lead.eventType}</p>
+        <hr>
+        <p>${quote.breakdown}</p>
+        <h3>Total: $${quote.price}</h3>
+        <p>Para reservar tu fecha, contáctanos al 787-463-5655.</p>
+      `
     });
 
     return new Response(
