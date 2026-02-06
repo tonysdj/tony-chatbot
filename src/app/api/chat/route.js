@@ -34,11 +34,36 @@ function calculateQuote(lead) {
   let price = 350;
   let breakdown = `Servicio base DJ 5 horas: $350`;
 
+  // Horas extra
   if (hours > 5) {
     const extra = hours - 5;
     const extraCost = extra * 50;
     price += extraCost;
     breakdown += ` + ${extra} hora(s) extra ($${extraCost})`;
+  }
+
+  // Zonas metro
+  const metro = [
+    "san juan","guaynabo","carolina",
+    "trujillo alto","bayamon","cataño"
+  ];
+
+  const town = (lead.town || "").toLowerCase();
+
+  if (!metro.includes(town)) {
+    // pueblos lejanos
+    const far = [
+      "ponce","mayaguez","aguadilla","rincon",
+      "cabo rojo","fajardo","humacao","yauco"
+    ];
+
+    if (far.includes(town)) {
+      price += 100;
+      breakdown += ` + recargo por distancia ($100)`;
+    } else {
+      price += 50;
+      breakdown += ` + recargo por distancia ($50)`;
+    }
   }
 
   return { price, hours, breakdown };
