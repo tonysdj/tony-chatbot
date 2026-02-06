@@ -165,30 +165,33 @@ function computeExtraTimeCharge(startRaw, endRaw) {
  * ================================
  *  PARSER BACKEND (ANTI-LOOP)
  * ================================
+ * Importante:
+ * - Aquí sí vamos a capturar town/venueType básicos para que NO se quede pidiendo lo mismo.
+ * - Si el usuario cambia de pueblo, se SOBREESCRIBE.
  */
 function extractFieldsFromMessage(message, lead) {
   const text = message.toLowerCase();
 
-  // Email
-  if (!lead.email) {
+  // Email (si cambia, se sobreescribe al último válido)
+  {
     const m = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
     if (m) lead.email = m[0];
   }
 
-  // Teléfono PR
-  if (!lead.phone) {
+  // Teléfono PR (si cambia, se sobreescribe al último válido)
+  {
     const m = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
     if (m) lead.phone = m[0];
   }
 
   // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm" / "18:00-23:00"
-  if (!lead.startTime || !lead.endTime) {
+  {
     const m = message.match(
       /(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
     );
     if (m) {
-      lead.startTime = lead.startTime || m[1].replace(/\s+/g, "");
-      lead.endTime = lead.endTime || m[2].replace(/\s+/g, "");
+      lead.startTime = m[1].replace(/\s+/g, "");
+      lead.endTime = m[2].replace(/\s+/g, "");
     }
   }
 
@@ -222,6 +225,85 @@ function extractFieldsFromMessage(message, lead) {
     if (keywords.some((k) => text.includes(k))) lead.eventType = message;
   }
 
+  // Detectar pueblo (sobre-escribe si cambia)
+  const towns = [
+    "san juan",
+    "caguas",
+    "carolina",
+    "trujillo alto",
+    "guaynabo",
+    "bayamón",
+    "catano",
+    "cataño",
+    "toa baja",
+    "toa alta",
+    "dorado",
+    "loiza",
+    "loíza",
+    "canovanas",
+    "canóvanas",
+    "rio grande",
+    "río grande",
+    "vega baja",
+    "vega alta",
+    "naranjito",
+    "arecibo",
+    "barceloneta",
+    "manati",
+    "manatí",
+    "humacao",
+    "juncos",
+    "san lorenzo",
+    "fajardo",
+    "guayama",
+    "ponce",
+    "mayaguez",
+    "mayagüez",
+    "aguadilla",
+    "cabo rojo",
+    "isabela",
+    "hatillo",
+    "jayuya",
+    "utuado",
+    "yauco",
+  ];
+
+  for (const t of towns) {
+    if (text.includes(t)) {
+      // normaliza para guardar sin acentos cuando aplique
+      lead.town = t
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u");
+      break;
+    }
+  }
+
+  // Detectar tipo de lugar (venueType) básico
+  const venues = [
+    "casa",
+    "salon",
+    "salón",
+    "negocio",
+    "restaurante",
+    "hotel",
+    "centro comunal",
+    "terraza",
+    "apartamento",
+    "condado",
+    "centro de convenciones",
+    "the place",
+  ];
+
+  for (const v of venues) {
+    if (text.includes(v)) {
+      lead.venueType = v;
+      break;
+    }
+  }
+
   return lead;
 }
 
@@ -241,7 +323,9 @@ export async function OPTIONS() {
  */
 export async function POST(req) {
   try {
-    let { message, lead = {}, sendEmail = false } = await req.json();
+    // quitamos sendEmail del control para evitar spam;
+    // el email se envía SOLO cuando se guarda el lead en Supabase.
+    let { message, lead = {} } = await req.json();
 
     if (!message) {
       return Response.json(
@@ -284,14 +368,12 @@ export async function POST(req) {
     if (looksLikeTimeToken(message)) {
       const t = normalizeTimeStr(message);
 
-      // si faltan ambas, primero llenamos startTime
       if (!lead.startTime) {
         lead.startTime = t;
       } else if (!lead.endTime) {
         lead.endTime = t;
       }
 
-      // recalcula missing después de asignar
       missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
     }
 
@@ -333,7 +415,10 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
-          { role: "system", content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC },
+          {
+            role: "system",
+            content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC,
+          },
           { role: "user", content: message },
         ],
         max_output_tokens: 240,
@@ -356,74 +441,105 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-    // 📧 Email solo cuando lead está completo
-    if (sendEmail && missing.length === 0) {
+    // 💾 Guardar lead en Supabase cuando esté completo + 📧 enviar email UNA sola vez
+    if (missing.length === 0) {
       try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
+        // Calcular precio final
+        let precioFinal = 350 + extraTimeCharge;
 
-        await resend.emails.send({
-          from: process.env.EMAIL_FROM,
-          to: process.env.EMAIL_TO,
-          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
-          html: `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap">${text}</pre>`,
+        // Cargo por distancia
+        const town = (lead.town || "").toLowerCase();
+
+        const zonaB = [
+          "caguas",
+          "gurabo",
+          "canovanas",
+          "canóvanas",
+          "loiza",
+          "loíza",
+          "rio grande",
+          "río grande",
+          "toa alta",
+          "vega baja",
+          "vega alta",
+          "naranjito",
+        ];
+        const zonaC = [
+          "arecibo",
+          "barceloneta",
+          "manati",
+          "manatí",
+          "humacao",
+          "juncos",
+          "san lorenzo",
+          "fajardo",
+          "guayama",
+        ];
+        const zonaD = [
+          "ponce",
+          "mayaguez",
+          "mayagüez",
+          "aguadilla",
+          "cabo rojo",
+          "isabela",
+          "hatillo",
+          "jayuya",
+          "utuado",
+          "yauco",
+        ];
+
+        if (zonaB.includes(town)) precioFinal += 25;
+        if (zonaC.includes(town)) precioFinal += 100;
+        if (zonaD.includes(town)) precioFinal += 150;
+
+        // Reglas especiales
+        const lugarCompleto = `${lead.town || ""} ${lead.venueType || ""}`.toLowerCase();
+
+        if (lugarCompleto.includes("the place") && lugarCompleto.includes("condado")) {
+          precioFinal = 500;
+        }
+
+        if (lugarCompleto.includes("centro de convenciones") && lugarCompleto.includes("cataño")) {
+          precioFinal += 100;
+        }
+
+        // 1) Guardar en Supabase
+        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/save-lead`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nombre: lead.name,
+            fecha_evento: lead.date,
+            horario: `${lead.startTime} a ${lead.endTime}`,
+            lugar: `${lead.town} - ${lead.venueType}`,
+            tipo_evento: lead.eventType,
+            email: lead.email,
+            telefono: lead.phone,
+            precio_cotizado: precioFinal,
+            duracion_horas: durationMinutes ? (durationMinutes / 60).toFixed(1) : null,
+            notas_cotizacion: "Cotización generada automáticamente por el chatbot",
+          }),
         });
-      } catch (err) {
-        console.error("Email error:", err);
+
+        // 2) Enviar email SOLO al guardar
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM,
+            to: process.env.EMAIL_TO,
+            subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
+            html: `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap">${text}</pre>`,
+          });
+        } catch (emailErr) {
+          console.error("Email error:", emailErr);
+        }
+      } catch (e) {
+        console.error("Error guardando lead:", e);
       }
     }
 
-// 💾 Guardar lead en Supabase cuando esté completo
-if (missing.length === 0) {
-  try {
-    // Calcular precio final
-    let precioFinal = 350 + extraTimeCharge;
-
-    // Cargo por distancia
-    const town = (lead.town || "").toLowerCase();
-
-    const zonaB = ["caguas","gurabo","canóvanas","loíza","río grande","toa alta","vega baja","vega alta","naranjito"];
-    const zonaC = ["arecibo","barceloneta","manatí","humacao","juncos","san lorenzo","fajardo","guayama"];
-    const zonaD = ["ponce","mayagüez","aguadilla","cabo rojo","isabela","hatillo","jayuya","utuado","yauco"];
-
-    if (zonaB.includes(town)) precioFinal += 25;
-    if (zonaC.includes(town)) precioFinal += 100;
-    if (zonaD.includes(town)) precioFinal += 150;
-
-    // Reglas especiales
-    const lugarCompleto = `${lead.town || ""} ${lead.venueType || ""}`.toLowerCase();
-
-    if (lugarCompleto.includes("the place") && lugarCompleto.includes("condado")) {
-      precioFinal = 500;
-    }
-
-    if (lugarCompleto.includes("centro de convenciones") && lugarCompleto.includes("cataño")) {
-      precioFinal += 100;
-    }
-
-    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/save-lead`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        nombre: lead.name,
-        fecha_evento: lead.date,
-        horario: `${lead.startTime} a ${lead.endTime}`,
-        lugar: `${lead.town} - ${lead.venueType}`,
-        tipo_evento: lead.eventType,
-        email: lead.email,
-        telefono: lead.phone,
-        precio_cotizado: precioFinal,
-        duracion_horas: durationMinutes
-          ? (durationMinutes / 60).toFixed(1)
-          : null,
-        notas_cotizacion: "Cotización generada automáticamente por el chatbot"
-      })
-    });
-  } catch (e) {
-    console.error("Error guardando lead:", e);
-  }
-}
     return Response.json({ reply: text, lead, missing }, { headers: corsHeaders() });
   } catch (err) {
     console.error(err);
@@ -433,8 +549,6 @@ if (missing.length === 0) {
     );
   }
 }
-
-
 
 /**
  * ================================
