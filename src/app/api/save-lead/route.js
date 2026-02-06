@@ -7,7 +7,20 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const lead = await req.json();
+    const body = await req.json();
+
+    const lead = {
+      nombre: body.nombre,
+      fecha_evento: body.fecha_evento,
+      horario: body.horario,
+      lugar: body.lugar,
+      tipo_evento: body.tipo_evento,
+      email: body.email,
+      telefono: body.telefono,
+      precio_cotizado: body.precio_cotizado,
+      duracion_horas: body.duracion_horas,
+      notas_cotizacion: body.notas_cotizacion
+    };
 
     const { error } = await supabase
       .from('leads')
