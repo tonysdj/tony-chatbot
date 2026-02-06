@@ -34,18 +34,6 @@ FORMA DE HACER LAS PREGUNTAS:
 - Nunca hagas listas.
 - Espera respuesta antes de continuar.
 - PROHIBIDO repetir preguntas ya contestadas.
-- Usa ejemplos cuando ayuden al cliente.
-
-PREGUNTA SOBRE LUGAR:
-“¿En qué pueblo será el evento y qué tipo de lugar es?
-Por ejemplo: casa, salón de actividades, negocio, restaurante, hotel, centro comunal, terraza, etc.”
-
-PREGUNTA SOBRE ACTIVIDAD:
-“¿Qué tipo de actividad será?
-Por ejemplo: cumpleaños, boda, quinceañero, evento corporativo, bautizo, aniversario, actividad familiar, etc.”
-
-UBICACIÓN:
-- Base: San Juan (Río Piedras).
 
 PRECIO BASE:
 - $350 por 5 horas en área metropolitana.
@@ -53,39 +41,11 @@ PRECIO BASE:
 HORAS ADICIONALES:
 - $25 cada 30 minutos adicionales.
 - Fracciones se redondean hacia arriba.
-
-ZONAS:
-ZONA A: San Juan, Río Piedras, Santurce, Hato Rey, Cupey, Carolina,
-Trujillo Alto, Guaynabo, Bayamón, Cataño, Toa Baja, Dorado.
-
-ZONA B (+$25): Caguas, Gurabo, Canóvanas, Loíza, Río Grande, Toa Alta,
-Vega Baja, Vega Alta, Naranjito.
-
-ZONA C (+$100): Arecibo, Barceloneta, Manatí, Humacao, Juncos,
-San Lorenzo, Fajardo, Guayama.
-
-ZONA D (+$150): Ponce, Mayagüez, Aguadilla, Cabo Rojo,
-Isabela, Hatillo, Jayuya, Utuado, Yauco.
-
-REGLAS ESPECIALES:
-- THE PLACE – CONDADO → Tarifa fija $500 (incluye 5 horas)
-- CENTRO DE CONVENCIONES – CATAÑO → +$100 por complejidad
-
-SALIDA FINAL OBLIGATORIA (FORMATO FIJO):
-- Mostrar SOLO los cargos que apliquen.
-
-Precio base (incluye 5 horas de servicio): $XXX
-Tiempo adicional: $XXX
-Cargo por distancia: $XXX
-Cargo por complejidad: $XXX
-Total: $XXX
-
-Tony se comunicará contigo para confirmar disponibilidad.
 `;
 
 /**
  * ================================
- *  Helpers de tiempo (backend)
+ *  Helpers de tiempo
  * ================================
  */
 function normalizeTimeStr(raw) {
@@ -93,7 +53,6 @@ function normalizeTimeStr(raw) {
   return raw.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-// Detecta si el mensaje es una hora “sueltita” (6pm, 1am, 18:00, 6:30pm)
 function looksLikeTimeToken(msg) {
   const s = normalizeTimeStr(msg);
   if (!s) return false;
@@ -104,12 +63,10 @@ function looksLikeTimeToken(msg) {
   );
 }
 
-// Convierte "6pm", "6:30pm", "18:00" a minutos desde 00:00
 function parseTimeToMinutes(raw) {
   if (!raw || typeof raw !== "string") return null;
   const s = raw.trim().toLowerCase().replace(/\s+/g, "");
 
-  // 24h: 18:00 / 18:30
   let m = s.match(/^(\d{1,2}):(\d{2})$/);
   if (m) {
     const hh = Number(m[1]);
@@ -117,7 +74,6 @@ function parseTimeToMinutes(raw) {
     if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return hh * 60 + mm;
   }
 
-  // am/pm: 6pm, 6:30pm
   m = s.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/);
   if (m) {
     let hh = Number(m[1]);
@@ -137,7 +93,6 @@ function parseTimeToMinutes(raw) {
   return null;
 }
 
-// Duración en minutos (soporta cruce de medianoche)
 function computeDurationMinutes(startRaw, endRaw) {
   const start = parseTimeToMinutes(startRaw);
   const end = parseTimeToMinutes(endRaw);
@@ -148,7 +103,6 @@ function computeDurationMinutes(startRaw, endRaw) {
   return diff;
 }
 
-// Cargo por tiempo adicional: base 300 min, +$25 por cada 30 min (redondeo arriba)
 function computeExtraTimeCharge(startRaw, endRaw) {
   const dur = computeDurationMinutes(startRaw, endRaw);
   if (dur == null) return { durationMinutes: null, extraTimeCharge: 0 };
@@ -163,143 +117,27 @@ function computeExtraTimeCharge(startRaw, endRaw) {
 
 /**
  * ================================
- *  PARSER BACKEND (ANTI-LOOP)
+ *  Parser básico del lead
  * ================================
- * Importante:
- * - Aquí sí vamos a capturar town/venueType básicos para que NO se quede pidiendo lo mismo.
- * - Si el usuario cambia de pueblo, se SOBREESCRIBE.
  */
 function extractFieldsFromMessage(message, lead) {
   const text = message.toLowerCase();
 
-  // Email (si cambia, se sobreescribe al último válido)
-  {
-    const m = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    if (m) lead.email = m[0];
-  }
+  const emailMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (emailMatch) lead.email = emailMatch[0];
 
-  // Teléfono PR (si cambia, se sobreescribe al último válido)
-  {
-    const m = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
-    if (m) lead.phone = m[0];
-  }
+  const phoneMatch = message.match(/(\+?1?\s?)?(787[\s.-]?\d{3}[\s.-]?\d{4})/);
+  if (phoneMatch) lead.phone = phoneMatch[0];
 
-  // Horario en un solo mensaje: "6pm a 1am" / "6:30pm hasta 11pm" / "18:00-23:00"
-  {
-    const m = message.match(
-      /(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})\s*(?:-|a|hasta)\s*(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) {
-      lead.startTime = m[1].replace(/\s+/g, "");
-      lead.endTime = m[2].replace(/\s+/g, "");
-    }
-  }
-
-  // Horas por separado: "empieza..." / "termina..."
-  if (!lead.startTime) {
-    const m = message.match(
-      /(empieza|comienza|inicio)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) lead.startTime = m[2].replace(/\s+/g, "");
-  }
-
-  if (!lead.endTime) {
-    const m = message.match(
-      /(termina|finaliza|se\s*acaba|fin)\s*(?:a\s*las?\s*)?(\d{1,2}(?::\d{2})?\s?(?:am|pm)|\d{1,2}:\d{2})/i
-    );
-    if (m) lead.endTime = m[2].replace(/\s+/g, "");
-  }
-
-  // Tipo de actividad (básico)
-  if (!lead.eventType) {
-    const keywords = [
-      "cumple",
-      "cumpleaños",
-      "boda",
-      "quince",
-      "quinceañero",
-      "corporativo",
-      "bautizo",
-      "aniversario",
-    ];
-    if (keywords.some((k) => text.includes(k))) lead.eventType = message;
-  }
-
-  // Detectar pueblo (sobre-escribe si cambia)
   const towns = [
-    "san juan",
-    "caguas",
-    "carolina",
-    "trujillo alto",
-    "guaynabo",
-    "bayamón",
-    "catano",
-    "cataño",
-    "toa baja",
-    "toa alta",
-    "dorado",
-    "loiza",
-    "loíza",
-    "canovanas",
-    "canóvanas",
-    "rio grande",
-    "río grande",
-    "vega baja",
-    "vega alta",
-    "naranjito",
-    "arecibo",
-    "barceloneta",
-    "manati",
-    "manatí",
-    "humacao",
-    "juncos",
-    "san lorenzo",
-    "fajardo",
-    "guayama",
-    "ponce",
-    "mayaguez",
-    "mayagüez",
-    "aguadilla",
-    "cabo rojo",
-    "isabela",
-    "hatillo",
-    "jayuya",
-    "utuado",
-    "yauco",
+    "san juan","caguas","carolina","trujillo alto","guaynabo","bayamon",
+    "cataño","catano","toa baja","toa alta","dorado","vega baja","vega alta",
+    "arecibo","manati","humacao","ponce","mayaguez","aguadilla"
   ];
 
   for (const t of towns) {
     if (text.includes(t)) {
-      // normaliza para guardar sin acentos cuando aplique
-      lead.town = t
-        .replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u");
-      break;
-    }
-  }
-
-  // Detectar tipo de lugar (venueType) básico
-  const venues = [
-    "casa",
-    "salon",
-    "salón",
-    "negocio",
-    "restaurante",
-    "hotel",
-    "centro comunal",
-    "terraza",
-    "apartamento",
-    "condado",
-    "centro de convenciones",
-    "the place",
-  ];
-
-  for (const v of venues) {
-    if (text.includes(v)) {
-      lead.venueType = v;
+      lead.town = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       break;
     }
   }
@@ -323,88 +161,29 @@ export async function OPTIONS() {
  */
 export async function POST(req) {
   try {
-    // quitamos sendEmail del control para evitar spam;
-    // el email se envía SOLO cuando se guarda el lead en Supabase.
     let { message, lead = {} } = await req.json();
 
-    if (!message) {
-      return Response.json(
-        { error: "Missing message" },
-        { status: 400, headers: corsHeaders() }
-      );
-    }
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return Response.json(
-        { error: "OPENAI_API_KEY missing" },
-        { status: 500, headers: corsHeaders() }
-      );
-    }
-
-    // ✅ Actualiza lead con lo último que dijo el usuario
     lead = extractFieldsFromMessage(message, lead);
 
     const REQUIRED_FIELDS = [
-      "name",
-      "date",
-      "startTime",
-      "endTime",
-      "town",
-      "venueType",
-      "eventType",
-      "email",
-      "phone",
+      "name","date","startTime","endTime",
+      "town","venueType","eventType","email","phone"
     ];
 
-    // ✅ Missing recalculado en backend
     let missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
 
-    /**
-     * ✅ FIX CLAVE:
-     * Si el usuario responde con una hora suelta (6pm / 1am / 18:00 / 6:30pm),
-     * guárdala automáticamente en el campo de horario que falte.
-     */
     if (looksLikeTimeToken(message)) {
       const t = normalizeTimeStr(message);
-
-      if (!lead.startTime) {
-        lead.startTime = t;
-      } else if (!lead.endTime) {
-        lead.endTime = t;
-      }
+      if (!lead.startTime) lead.startTime = t;
+      else if (!lead.endTime) lead.endTime = t;
 
       missing = REQUIRED_FIELDS.filter((f) => !lead?.[f]);
     }
 
-    // ✅ Cálculo determinístico de tiempo adicional (backend)
-    const { durationMinutes, extraTimeCharge } = computeExtraTimeCharge(
-      lead?.startTime,
-      lead?.endTime
-    );
+    const { durationMinutes, extraTimeCharge } =
+      computeExtraTimeCharge(lead?.startTime, lead?.endTime);
 
-    const SYSTEM_PROMPT_DYNAMIC = `
-ESTADO ACTUAL DEL LEAD:
-${REQUIRED_FIELDS.map((f) => `${f}: ${lead?.[f] || "❌"}`).join("\n")}
-
-DATOS FALTANTES:
-${missing.length ? missing.join(", ") : "NINGUNO"}
-
-TIEMPO (USAR ESTO, NO INVENTAR):
-- startTime: ${lead?.startTime || "❌"}
-- endTime: ${lead?.endTime || "❌"}
-- durationMinutes: ${durationMinutes == null ? "❌" : durationMinutes}
-- extraTimeCharge: $${extraTimeCharge}
-
-REGLAS ANTI-REPETICIÓN / CIERRE:
-- Si hay datos faltantes, pregunta SOLO el PRIMERO de la lista.
-- PROHIBIDO repetir preguntas ya contestadas.
-- Si NO falta ninguno:
-  - CIERRA
-  - COTIZA
-  - Si extraTimeCharge > 0, DEBES mostrar la línea: "Tiempo adicional: $${extraTimeCharge}"
-  - Usa EXACTAMENTE el formato final obligatorio del prompt (mismo orden y texto).
-`;
+    const apiKey = process.env.OPENAI_API_KEY;
 
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -415,100 +194,59 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         input: [
-          {
-            role: "system",
-            content: SYSTEM_PROMPT + "\n" + SYSTEM_PROMPT_DYNAMIC,
-          },
+          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: message },
         ],
-        max_output_tokens: 240,
-        truncation: "auto",
       }),
     });
 
     const data = await r.json();
-
-    if (!r.ok) {
-      console.error("OpenAI error:", data);
-      return Response.json(
-        { error: "OpenAI error", details: data },
-        { status: r.status, headers: corsHeaders() }
-      );
-    }
-
     const text =
       data.output_text ||
       data?.output?.[0]?.content?.map((c) => c.text).join("") ||
       "";
 
-    // 💾 Guardar lead en Supabase cuando esté completo + 📧 enviar email UNA sola vez
+    // Guardar lead cuando esté completo
     if (missing.length === 0) {
       try {
-        // Calcular precio final
-        let precioFinal = 350 + extraTimeCharge;
+        // ================================
+        // CÁLCULO DE PRECIO FINAL
+        // ================================
+        let precioBase = 350;
+        let cargoDistancia = 0;
+        let cargoComplejidad = 0;
 
-        // Cargo por distancia
-        const town = (lead.town || "").toLowerCase();
+        const town = (lead.town || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
 
-        const zonaB = [
-          "caguas",
-          "gurabo",
-          "canovanas",
-          "canóvanas",
-          "loiza",
-          "loíza",
-          "rio grande",
-          "río grande",
-          "toa alta",
-          "vega baja",
-          "vega alta",
-          "naranjito",
-        ];
-        const zonaC = [
-          "arecibo",
-          "barceloneta",
-          "manati",
-          "manatí",
-          "humacao",
-          "juncos",
-          "san lorenzo",
-          "fajardo",
-          "guayama",
-        ];
-        const zonaD = [
-          "ponce",
-          "mayaguez",
-          "mayagüez",
-          "aguadilla",
-          "cabo rojo",
-          "isabela",
-          "hatillo",
-          "jayuya",
-          "utuado",
-          "yauco",
-        ];
+        const zonaB = ["caguas"];
+        if (zonaB.includes(town)) cargoDistancia = 25;
 
-        if (zonaB.includes(town)) precioFinal += 25;
-        if (zonaC.includes(town)) precioFinal += 100;
-        if (zonaD.includes(town)) precioFinal += 150;
-
-        // Reglas especiales
-        const lugarCompleto = `${lead.town || ""} ${lead.venueType || ""}`.toLowerCase();
+        const lugarCompleto = `${lead.town || ""} ${lead.venueType || ""}`
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
 
         if (lugarCompleto.includes("the place") && lugarCompleto.includes("condado")) {
-          precioFinal = 500;
+          precioBase = 500;
+          cargoDistancia = 0;
         }
 
-        if (lugarCompleto.includes("centro de convenciones") && lugarCompleto.includes("cataño")) {
-          precioFinal += 100;
+        if (lugarCompleto.includes("centro de convenciones") && lugarCompleto.includes("catano")) {
+          cargoComplejidad = 100;
         }
 
-        // 1) Guardar en Supabase
+        let precioFinal =
+          precioBase +
+          extraTimeCharge +
+          cargoDistancia +
+          cargoComplejidad;
+
         await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/save-lead`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             nombre: lead.name,
             fecha_evento: lead.date,
@@ -518,23 +256,20 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
             email: lead.email,
             telefono: lead.phone,
             precio_cotizado: precioFinal,
-            duracion_horas: durationMinutes ? (durationMinutes / 60).toFixed(1) : null,
-            notas_cotizacion: "Cotización generada automáticamente por el chatbot",
+            duracion_horas: durationMinutes
+              ? (durationMinutes / 60).toFixed(1)
+              : null,
           }),
         });
 
-        // 2) Enviar email SOLO al guardar
-        try {
-          const resend = new Resend(process.env.RESEND_API_KEY);
-          await resend.emails.send({
-            from: process.env.EMAIL_FROM,
-            to: process.env.EMAIL_TO,
-            subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
-            html: `<pre style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap">${text}</pre>`,
-          });
-        } catch (emailErr) {
-          console.error("Email error:", emailErr);
-        }
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM,
+          to: process.env.EMAIL_TO,
+          subject: `Nuevo lead – Tony’s DJ – ${lead?.name || ""}`,
+          html: `<pre>${text}</pre>`,
+        });
+
       } catch (e) {
         console.error("Error guardando lead:", e);
       }
@@ -550,11 +285,6 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
   }
 }
 
-/**
- * ================================
- *  HEADERS
- * ================================
- */
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": process.env.WP_ORIGIN || "*",
