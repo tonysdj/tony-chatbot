@@ -372,6 +372,37 @@ REGLAS ANTI-REPETICIÓN / CIERRE:
       }
     }
 
+// 💾 Guardar lead en Supabase cuando esté completo
+if (missing.length === 0) {
+  try {
+    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/save-lead`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        nombre: lead.name,
+        fecha_evento: lead.date,
+        horario: `${lead.startTime} a ${lead.endTime}`,
+        lugar: `${lead.town} - ${lead.venueType}`,
+        tipo_evento: lead.eventType,
+        email: lead.email,
+        telefono: lead.phone,
+        precio_cotizado: extraTimeCharge
+          ? 350 + extraTimeCharge
+          : 350,
+        duracion_horas: durationMinutes
+          ? (durationMinutes / 60).toFixed(1)
+          : null,
+        notas_cotizacion: "Cotización generada automáticamente por el chatbot"
+      })
+    });
+  } catch (e) {
+    console.error("Error guardando lead:", e);
+  }
+}
+
+
     return Response.json({ reply: text, lead, missing }, { headers: corsHeaders() });
   } catch (err) {
     console.error(err);
