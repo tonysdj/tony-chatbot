@@ -44,6 +44,23 @@ function calculateQuote(lead) {
   return { price, hours, breakdown };
 }
 
+// 👉 CORS headers
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+// 👉 Respuesta al preflight (CORS)
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: corsHeaders(),
+  });
+}
+
 export async function POST(req) {
   try {
     const { message, lead = {} } = await req.json();
@@ -90,12 +107,9 @@ export async function POST(req) {
             content: `
 Eres el asistente oficial de Tony’s DJ en Puerto Rico.
 Hablas en español boricua, profesional y amable.
-
-Reglas:
-- Haz solo una pregunta a la vez.
-- Nunca repitas preguntas.
-- Solo pregunta por el próximo dato faltante.
-- No hables de precios hasta tener toda la información.
+Haz una sola pregunta a la vez.
+No repitas preguntas.
+No hables de precios hasta tener toda la información.
 `
           },
           {
@@ -110,7 +124,7 @@ Reglas:
     const data = await response.json();
     const reply =
       data.output?.[0]?.content?.[0]?.text ||
-      "Perfecto. Continuamos con la información.";
+      "Perfecto. Continuamos.";
 
     if (missing.length === 0 && quote.price) {
       return new Response(
@@ -120,16 +134,19 @@ Reglas:
             `${quote.breakdown}\n` +
             `Total: $${quote.price}`,
         }),
-        { status: 200 }
+        { status: 200, headers: corsHeaders() }
       );
     }
 
-    return new Response(JSON.stringify({ reply }), { status: 200 });
+    return new Response(JSON.stringify({ reply }), {
+      status: 200,
+      headers: corsHeaders(),
+    });
 
   } catch (err) {
     return new Response(
       JSON.stringify({ reply: "Error en el servidor" }),
-      { status: 500 }
+      { status: 500, headers: corsHeaders() }
     );
   }
 }
