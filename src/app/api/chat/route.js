@@ -1,13 +1,16 @@
 export const runtime = "nodejs";
 
-const REQUIRED = [
-  "name","date","startTime","endTime",
-  "town","venueType","eventType","email","phone"
+const STEPS = [
+  { key: "name", question: "¿Cuál es tu nombre completo?" },
+  { key: "date", question: "¿Para qué fecha es el evento?" },
+  { key: "startTime", question: "¿A qué hora comienza la actividad?" },
+  { key: "endTime", question: "¿Y a qué hora termina?" },
+  { key: "town", question: "¿En qué pueblo será el evento?" },
+  { key: "venueType", question: "¿Es en casa, salón, hotel o restaurante?" },
+  { key: "eventType", question: "¿Qué tipo de actividad es?" },
+  { key: "email", question: "¿Cuál es tu correo electrónico?" },
+  { key: "phone", question: "¿Y tu número de teléfono?" }
 ];
-
-function missingFields(lead) {
-  return REQUIRED.filter(k => !lead[k]);
-}
 
 function parseTime(t) {
   if (!t) return null;
@@ -34,7 +37,6 @@ function calculateQuote(lead) {
   let price = 350;
   let breakdown = `Servicio base DJ 5 horas: $350`;
 
-  // Horas extra
   if (hours > 5) {
     const extra = hours - 5;
     const extraCost = extra * 50;
@@ -42,7 +44,6 @@ function calculateQuote(lead) {
     breakdown += ` + ${extra} hora(s) extra ($${extraCost})`;
   }
 
-  // Zonas metro
   const metro = [
     "san juan","guaynabo","carolina",
     "trujillo alto","bayamon","cataño"
@@ -51,7 +52,6 @@ function calculateQuote(lead) {
   const town = (lead.town || "").toLowerCase();
 
   if (!metro.includes(town)) {
-    // pueblos lejanos
     const far = [
       "ponce","mayaguez","aguadilla","rincon",
       "cabo rojo","fajardo","humacao","yauco"
@@ -69,7 +69,7 @@ function calculateQuote(lead) {
   return { price, hours, breakdown };
 }
 
-// 👉 CORS headers
+// CORS
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -78,7 +78,6 @@ function corsHeaders() {
   };
 }
 
-// 👉 Respuesta al preflight (CORS)
 export async function OPTIONS() {
   return new Response(null, {
     status: 200,
@@ -88,85 +87,49 @@ export async function OPTIONS() {
 
 export async function POST(req) {
   try {
-    const { message, lead = {} } = await req.json();
-    const missing = missingFields(lead);
+    const { lead = {} } = await req.json();
 
-    let quote = { price: null, hours: null, breakdown: "" };
+    // buscar siguiente paso
+    const nextStep = STEPS.find(step => !lead[step.key]);
 
-    if (missing.length === 0) {
-      quote = calculateQuote(lead);
-
-      const origin = req.nextUrl?.origin || new URL(req.url).origin;
-
-      await fetch(`${origin}/api/save-lead`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: lead.name,
-          fecha_evento: lead.date,
-          horario: `${lead.startTime} - ${lead.endTime}`,
-          lugar: `${lead.town} (${lead.venueType})`,
-          tipo_evento: lead.eventType,
-          email: lead.email,
-          telefono: lead.phone,
-          precio_cotizado: quote.price,
-          duracion_horas: quote.hours,
-          notas_cotizacion: quote.breakdown
-        }),
-      });
-    }
-
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        input: [
-          {
-            role: "system",
-            content: `
-Eres el asistente oficial de Tony’s DJ en Puerto Rico.
-Hablas en español boricua, profesional y amable.
-Haz una sola pregunta a la vez.
-No repitas preguntas.
-No hables de precios hasta tener toda la información.
-`
-          },
-          {
-            role: "user",
-            content: `Estado del lead:\n${JSON.stringify({ lead, missing }, null, 2)}`
-          },
-          { role: "user", content: message }
-        ],
-      }),
-    });
-
-    const data = await response.json();
-    const reply =
-      data.output?.[0]?.content?.[0]?.text ||
-      "Perfecto. Continuamos.";
-
-    if (missing.length === 0 && quote.price) {
+    if (nextStep) {
       return new Response(
-        JSON.stringify({
-          reply:
-            `¡Perfecto! Aquí tienes tu cotización:\n` +
-            `${quote.breakdown}\n` +
-            `Total: $${quote.price}`,
-        }),
+        JSON.stringify({ reply: nextStep.question }),
         { status: 200, headers: corsHeaders() }
       );
     }
 
-    return new Response(JSON.stringify({ reply }), {
-      status: 200,
-      headers: corsHeaders(),
+    // todo completo → calcular
+    const quote = calculateQuote(lead);
+
+    const origin = req.nextUrl?.origin || new URL(req.url).origin;
+
+    await fetch(`${origin}/api/save-lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombre: lead.name,
+        fecha_evento: lead.date,
+        horario: `${lead.startTime} - ${lead.endTime}`,
+        lugar: `${lead.town} (${lead.venueType})`,
+        tipo_evento: lead.eventType,
+        email: lead.email,
+        telefono: lead.phone,
+        precio_cotizado: quote.price,
+        duracion_horas: quote.hours,
+        notas_cotizacion: quote.breakdown
+      }),
     });
+
+    return new Response(
+      JSON.stringify({
+        reply:
+          `¡Perfecto! Aquí tienes tu cotización:\n` +
+          `${quote.breakdown}\n` +
+          `Total: $${quote.price}`
+      }),
+      { status: 200, headers: corsHeaders() }
+    );
 
   } catch (err) {
     return new Response(
