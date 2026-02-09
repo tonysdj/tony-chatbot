@@ -22,7 +22,13 @@ function parseTime(t) {
   if (!m) return null;
   let h = parseInt(m[1], 10);
   const min = m[3] ? parseInt(m[3], 10) : 0;
-  const ap = m[4];
+  let ap = m[4];
+
+// Si no tiene am/pm, asumir pm si la hora es entre 1 y 11
+  if (!ap && h >= 1 && h <= 11) {
+  ap = "pm";
+}
+
   if (ap === "pm" && h < 12) h += 12;
   if (ap === "am" && h === 12) h = 0;
   return h + min / 60;
