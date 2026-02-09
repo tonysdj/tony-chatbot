@@ -178,23 +178,57 @@ export async function POST(req) {
       }),
     });
 
-    // Enviar email
-    await resend.emails.send({
-      from: "Tony’s DJ <onboarding@resend.dev>",
-      to: ["tonysdj@gmail.com"],
-      subject: "Tu cotización de Tony’s DJ",
-      html: `
-        <h2>¡Gracias por tu interés en Tony’s DJ!</h2>
-        <p><strong>Fecha:</strong> ${lead.date}</p>
-        <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
-        <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
-        <p><strong>Actividad:</strong> ${lead.eventType}</p>
-        <hr>
-        <p>${quote.breakdown}</p>
-        <h3>Total: $${quote.price}</h3>
-        <p>Para reservar tu fecha, contáctanos al 787-463-5655.</p>
-      `
-    });
+// 📩 Email interno para Tony
+await resend.emails.send({
+  from: "Tony’s DJ <onboarding@resend.dev>",
+  to: ["tonysdj@gmail.com"],
+  subject: "Nueva cotización recibida - Tony’s DJ",
+  html: `
+    <h2>Nueva cotización recibida</h2>
+    <p><strong>Nombre:</strong> ${lead.name}</p>
+    <p><strong>Email:</strong> ${lead.email}</p>
+    <p><strong>Teléfono:</strong> ${lead.phone}</p>
+    <hr>
+    <p><strong>Fecha:</strong> ${lead.date}</p>
+    <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
+    <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
+    <p><strong>Actividad:</strong> ${lead.eventType}</p>
+    <hr>
+    <p>${quote.breakdown}</p>
+    <h3>Total cotizado: $${quote.price}</h3>
+  `
+});
+
+// 📩 Email de confirmación para el cliente
+await resend.emails.send({
+  from: "Tony’s DJ <onboarding@resend.dev>",
+  to: [lead.email],
+  subject: "Tu cotización - Tony’s DJ",
+  html: `
+    <h2>¡Gracias por tu interés en Tony’s DJ!</h2>
+
+    <p>Hemos recibido tu solicitud de cotización.</p>
+
+    <hr>
+    <h3>Resumen de tu cotización</h3>
+    <p><strong>Fecha:</strong> ${lead.date}</p>
+    <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
+    <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
+    <p><strong>Actividad:</strong> ${lead.eventType}</p>
+    <p>${quote.breakdown}</p>
+    <h3>Total estimado: $${quote.price}</h3>
+    <hr>
+
+    <p><strong>Importante:</strong> Esta cotización está sujeta a disponibilidad.</p>
+    <p>Tony’s DJ se estará comunicando contigo pronto para confirmar la fecha y los detalles del evento.</p>
+
+    <p>Si necesitas más información, puedes comunicarte conmigo directamente por WhatsApp:</p>
+    <h3>📱 787-463-5655</h3>
+
+    <p>¡Gracias por confiar en Tony’s DJ! 🎧</p>
+  `
+});
+
 
     return new Response(
   JSON.stringify({
