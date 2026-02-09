@@ -48,27 +48,76 @@ function calculateQuote(lead) {
     breakdown += ` + ${extra} hora(s) extra ($${extraCost})`;
   }
 
-  const metro = [
-    "san juan","guaynabo","carolina",
-    "trujillo alto","bayamon","cataño"
-  ];
-
   const town = (lead.town || "").toLowerCase();
 
-  if (!metro.includes(town)) {
-    const far = [
-      "ponce","mayaguez","aguadilla","rincon",
-      "cabo rojo","fajardo","humacao","yauco"
-    ];
+const metro = [
+  "san juan","guaynabo","carolina",
+  "trujillo alto","bayamon","cataño"
+];
 
-    if (far.includes(town)) {
-      price += 100;
-      breakdown += ` + recargo por distancia ($100)`;
-    } else {
-      price += 50;
-      breakdown += ` + recargo por distancia ($50)`;
-    }
-  }
+const dist1 = [
+  "toa baja","toa alta","dorado",
+  "vega alta","vega baja",
+  "naranjito","aguas buenas","loiza"
+];
+
+const dist2 = [
+  "arecibo","manati","ciales",
+  "morovis","barranquitas","orocovis",
+  "caguas","cayey","san lorenzo","gurabo"
+];
+
+const dist3 = [
+  "ponce","juana diaz","villalba",
+  "coamo","santa isabel","salinas",
+  "yabucoa","maunabo"
+];
+
+const dist4 = [
+  "guayama","arroyo","patillas",
+  "adjuntas","lares","utuado"
+];
+
+const dist5 = [
+  "mayaguez","aguadilla","rincon",
+  "cabo rojo","san german",
+  "hormigueros","lajas",
+  "isabela","aguada"
+];
+
+const manualQuote = ["vieques","culebra"];
+
+if (manualQuote.includes(town)) {
+  return {
+    price: null,
+    hours,
+    breakdown: "Este destino requiere cotización manual. Te estaremos contactando."
+  };
+}
+
+let distanceFee = 0;
+
+if (metro.includes(town)) {
+  distanceFee = 0;
+} else if (dist1.includes(town)) {
+  distanceFee = 25;
+} else if (dist2.includes(town)) {
+  distanceFee = 50;
+} else if (dist3.includes(town)) {
+  distanceFee = 75;
+} else if (dist4.includes(town)) {
+  distanceFee = 100;
+} else if (dist5.includes(town)) {
+  distanceFee = 200;
+} else {
+  distanceFee = 50;
+}
+
+if (distanceFee > 0) {
+  price += distanceFee;
+  breakdown += ` + recargo por distancia ($${distanceFee})`;
+}
+
 
   return { price, hours, breakdown };
 }
