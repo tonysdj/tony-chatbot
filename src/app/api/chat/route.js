@@ -181,7 +181,7 @@ export async function POST(req) {
     // Enviar email
     await resend.emails.send({
       from: "Tony’s DJ <onboarding@resend.dev>",
-      to: [lead.email],
+      to: [lead.email, "tonysdj@gmail.com"],
       subject: "Tu cotización de Tony’s DJ",
       html: `
         <h2>¡Gracias por tu interés en Tony’s DJ!</h2>
