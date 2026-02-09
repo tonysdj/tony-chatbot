@@ -197,12 +197,15 @@ export async function POST(req) {
     });
 
     return new Response(
-      JSON.stringify({
-        reply:
-          `¡Perfecto! Aquí tienes tu cotización:\n` +
-          `${quote.breakdown}\n` +
-          `Total: $${quote.price}`
-      }),
+  JSON.stringify({
+    reply:
+      `¡Perfecto! Aquí tienes tu cotización:\n` +
+      `${quote.breakdown}\n` +
+      `Total: $${quote.price}\n\n` +
+      `Esta cotización está sujeta a disponibilidad. ` +
+      `Tony’s DJ se estará comunicando contigo para confirmar la fecha.`
+  }),
+
       { status: 200, headers: corsHeaders() }
     );
 
