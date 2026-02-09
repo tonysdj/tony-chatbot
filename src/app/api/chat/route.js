@@ -52,11 +52,11 @@ function calculateQuote(lead) {
 
 const metro = [
   "san juan","guaynabo","carolina",
-  "trujillo alto","bayamon","cataño"
+  "trujillo alto","bayamon","cataño","canovanas"
 ];
 
 const dist1 = [
-  "toa baja","toa alta","dorado",
+  "Rio Grande","toa baja","toa alta","dorado",
   "vega alta","vega baja",
   "naranjito","aguas buenas","loiza"
 ];
@@ -68,7 +68,7 @@ const dist2 = [
 ];
 
 const dist3 = [
-  "ponce","juana diaz","villalba",
+  "fajardo","ponce","juana diaz","villalba",
   "coamo","santa isabel","salinas",
   "yabucoa","maunabo"
 ];
