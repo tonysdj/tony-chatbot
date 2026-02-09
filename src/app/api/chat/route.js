@@ -180,7 +180,7 @@ export async function POST(req) {
 
     // Enviar email
     await resend.emails.send({
-      from: "Tony’s DJ <onboarding@resend.dev>",
+      from: "onboarding@resend.dev",
       to: [lead.email],
       subject: "Tu cotización de Tony’s DJ",
       html: `
