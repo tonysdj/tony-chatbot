@@ -180,7 +180,7 @@ export async function POST(req) {
 
 // 📩 Email interno para Tony
 await resend.emails.send({
-  from: "Tony’s DJ <onboarding@resend.dev>",
+  from: "Tony’s DJ <cotizaciones@tonysdjpr.com>",
   to: ["tonysdj@gmail.com"],
   subject: "Nueva cotización recibida - Tony’s DJ",
   html: `
@@ -201,7 +201,7 @@ await resend.emails.send({
 
 // 📩 Email de confirmación para el cliente
 await resend.emails.send({
-  from: "Tony’s DJ <onboarding@resend.dev>",
+  from: "Tony’s DJ <cotizaciones@tonysdjpr.com>",
   to: [lead.email],
   subject: "Tu cotización - Tony’s DJ",
   html: `
