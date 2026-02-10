@@ -58,18 +58,30 @@ let baseLabel = "Servicio base DJ 5 horas";
 
 const dateText = (lead.date || "").toLowerCase();
 
-if (
+// 31 de diciembre (Fin de Año)
+if (dateText.includes("31") && dateText.includes("dic")) {
+  basePrice = 700;
+  baseLabel = "Servicio especial de Fin de Año";
+}
+
+// 24 y 25 de diciembre
+else if (
   dateText.includes("24") && dateText.includes("dic") ||
-  dateText.includes("25") && dateText.includes("dic") ||
-  dateText.includes("31") && dateText.includes("dic") ||
-  dateText.includes("1") && dateText.includes("ene")
+  dateText.includes("25") && dateText.includes("dic")
 ) {
+  basePrice = 500;
+  baseLabel = "Servicio especial por fecha festiva";
+}
+
+// 1 de enero
+else if (dateText.includes("1") && dateText.includes("ene")) {
   basePrice = 500;
   baseLabel = "Servicio especial por fecha festiva";
 }
 
 let price = basePrice;
 let breakdown = `${baseLabel}: $${basePrice}`;
+
 
 
 
