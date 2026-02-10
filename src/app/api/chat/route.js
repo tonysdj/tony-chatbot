@@ -155,8 +155,8 @@ const townFees = {
   "isabela": 200,
   "aguada": 200,
   "anasco": 200,
-  "moca": 200
-  "guanica": 200
+  "moca": 200,
+  "guanica": 200,
   "yauco": 200,
 };
 
