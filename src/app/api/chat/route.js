@@ -54,10 +54,10 @@ function calculateQuote(lead) {
 // PRECIO BASE SEGÚN FECHA
 // ===============================
 let basePrice = 350;
+let baseLabel = "Servicio base DJ 5 horas";
 
 const dateText = (lead.date || "").toLowerCase();
 
-// Detectar fechas especiales
 if (
   dateText.includes("24") && dateText.includes("dic") ||
   dateText.includes("25") && dateText.includes("dic") ||
@@ -65,10 +65,12 @@ if (
   dateText.includes("1") && dateText.includes("ene")
 ) {
   basePrice = 500;
+  baseLabel = "Servicio especial por fecha festiva";
 }
 
 let price = basePrice;
-let breakdown = `Servicio base DJ 5 horas: $${basePrice}`;
+let breakdown = `${baseLabel}: $${basePrice}`;
+
 
 
   if (hours > 5) {
