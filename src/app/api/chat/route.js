@@ -1,155 +1,3 @@
-import { Resend } from "resend";
-
-export const runtime = "nodejs";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const STEPS = [
-  { key: "name", question: "¿Cuál es tu nombre completo?" },
-  { key: "date", question: "¿Para qué fecha es el evento?" },
-  { key: "startTime", question: "¿A qué hora comienza la actividad?" },
-  { key: "endTime", question: "¿Y a qué hora termina?" },
-  { key: "town", question: "¿En qué pueblo será el evento?" },
-  { key: "venueType", question: "¿Donde será la actividad? (Casa, Salón de Actividades, Hotel, etc.)" },
-  { key: "floor", question: "¿El montaje sería en primer o segundo piso?" },
-  { key: "eventType", question: "¿Qué tipo de actividad es? (Cumpleaños, Boda, Quinceañero, etc.) " },
-  { key: "email", question: "¿Cuál es tu correo electrónico?" },
-  { key: "phone", question: "¿Y tu número de teléfono?" }
-];
-
-function parseTime(t) {
-  if (!t) return null;
-  const m = t.toLowerCase().match(/(\d{1,2})(:(\d{2}))?\s*(am|pm)?/);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = m[3] ? parseInt(m[3], 10) : 0;
-  let ap = m[4];
-
-// Si no tiene am/pm:
-if (!ap) {
-  if (h === 12) {
-    ap = "am"; // asumir medianoche
-  } else if (h >= 1 && h <= 11) {
-    ap = "pm"; // asumir noche
-  }
-}
-
-
-  if (ap === "pm" && h < 12) h += 12;
-  if (ap === "am" && h === 12) h = 0;
-  return h + min / 60;
-}
-
-function calculateQuote(lead) {
-  const start = parseTime(lead.startTime);
-  const end = parseTime(lead.endTime);
-  if (start == null || end == null) {
-    return { price: null, hours: null, breakdown: "" };
-  }
-
-  let hours = end - start;
-  if (hours <= 0) hours += 24;
-
-  let price = 350;
-  let breakdown = `Servicio base DJ 5 horas: $350`;
-
-  if (hours > 5) {
-    const extra = hours - 5;
-    const extraCost = extra * 50;
-    price += extraCost;
-    breakdown += ` + ${extra} hora(s) extra ($${extraCost})`;
-  }
-
- const town = (lead.town || "").toLowerCase().trim();
-
-const townFees = {
-  // Metro ($0)
-  "san juan": 0,
-  "guaynabo": 0,
-  "carolina": 0,
-  "trujillo alto": 0,
-  "bayamon": 0,
-  "catano": 0,
-  "canovanas": 0,
-  "trujillo alto": 0,
-
-  // Distancia 1 ($25)
-  "rio grande": 25,
-  "toa baja": 25,
-  "toa alta": 25,
-  "dorado": 25,
-  "vega alta": 25,
-  "vega baja": 25,
-  "naranjito": 25,
-  "aguas buenas": 25,
-  "loiza": 25,
-  "caguas": 25,
-
-  // Distancia 2 ($50)
-  "arecibo": 50,
-  "barceloneta": 50,
-  "corozal": 50,
-  "orocovis": 50,
-  "cayey": 50,
-  "san lorenzo": 50,
-  "gurabo": 50,
-  "juncos": 50,
-  "cidra": 50,
-  
-
-  // Distancia 3 ($75)
-  "fajardo": 75,
-  "ponce": 75,
-  "santa isabel": 75,
-  "salinas": 75,
-  "yabucoa": 75,
-  "maunabo": 75,
-  "las piedras": 75,
-  "humacao": 75,
-  "naguabo": 75,
-
-  // Distancia 4 ($100)
-  "barranquitas": 100,
-  "florida": 100,
-  "manati": 100,
-  "ciales": 100,
-  "morovis": 100,
-  "hatillo": 100,
-  "camuy": 100,
-  "quebradillas": 100,
-  "juana diaz": 100,
-  "villalba": 100,
-  "coamo": 100,
-  "guayama": 100,
-  "aibonito": 100,
-  "arroyo": 100,
-  "patillas": 100,
-  "lares": 100,
-  "utuado": 100,
-  "yauco": 100,
-  "san sebastian": 100,
-
-  // Distancia 5 ($200)
-  "sabana grande": 200,
-  "adjuntas": 200,
-  "maricao": 200,
-  "mayaguez": 200,
-  "aguadilla": 200,
-  "las marias": 200,
-  "jayuya": 200,
-  "rincon": 200,
-  "cabo rojo": 200,
-  "san german": 200,
-  "hormigueros": 200,
-  "lajas": 200,
-  "isabela": 200,
-  "aguada": 200,
-  "anasco": 200,
-  "moca": 200
-};
-
-const manualQuote = ["vieques","culebra"];
-
 if (manualQuote.includes(town)) {
   return {
     price: null,
@@ -199,7 +47,46 @@ export async function OPTIONS() {
 
 export async function POST(req) {
   try {
-    const { lead = {} } = await req.json();
+
+    const { lead = {}, message = "" } = await req.json();
+
+// ===============================
+// RESPUESTAS A PREGUNTAS GENERALES
+// ===============================
+const msg = (message || "").toLowerCase();
+
+if (!lead.name) {
+  if (msg.includes("incluye") || msg.includes("servicio")) {
+    return new Response(
+      JSON.stringify({
+        reply:
+          "Mi servicio incluye DJ con música variada o personalizada, karaoke con micrófonos, luces básicas y fotos durante la actividad. El servicio dura 5 horas."
+      }),
+      { status: 200, headers: corsHeaders() }
+    );
+  }
+
+  if (msg.includes("pago") || msg.includes("deposito") || msg.includes("depósito")) {
+    return new Response(
+      JSON.stringify({
+        reply:
+          "No se requiere depósito. El pago se realiza el mismo día de la actividad por ATH Móvil o efectivo."
+      }),
+      { status: 200, headers: corsHeaders() }
+    );
+  }
+
+  if (msg.includes("precio") || msg.includes("cuanto") || msg.includes("cuánto")) {
+    return new Response(
+      JSON.stringify({
+        reply:
+          "El precio puede variar según la distancia y el horario del evento. Si gustas, te preparo una cotización. ¿Cuál es tu nombre completo?"
+      }),
+      { status: 200, headers: corsHeaders() }
+    );
+  }
+}
+
 
     const nextStep = STEPS.find(step => !lead[step.key]);
 
