@@ -50,8 +50,26 @@ function calculateQuote(lead) {
   let hours = end - start;
   if (hours <= 0) hours += 24;
 
-  let price = 350;
-  let breakdown = `Servicio base DJ 5 horas: $350`;
+  // ===============================
+// PRECIO BASE SEGÚN FECHA
+// ===============================
+let basePrice = 350;
+
+const dateText = (lead.date || "").toLowerCase();
+
+// Detectar fechas especiales
+if (
+  dateText.includes("24") && dateText.includes("dic") ||
+  dateText.includes("25") && dateText.includes("dic") ||
+  dateText.includes("31") && dateText.includes("dic") ||
+  dateText.includes("1") && dateText.includes("ene")
+) {
+  basePrice = 500;
+}
+
+let price = basePrice;
+let breakdown = `Servicio base DJ 5 horas: $${basePrice}`;
+
 
   if (hours > 5) {
     const extra = hours - 5;
