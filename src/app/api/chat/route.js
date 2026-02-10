@@ -11,6 +11,7 @@ const STEPS = [
   { key: "endTime", question: "¿Y a qué hora termina?" },
   { key: "town", question: "¿En qué pueblo será el evento?" },
   { key: "venueType", question: "¿Donde será la actividad? (Casa, Salón de Actividades, Hotel, etc.)" },
+  { key: "floor", question: "¿El montaje sería en primer o segundo piso?" },
   { key: "eventType", question: "¿Qué tipo de actividad es? (Cumpleaños, Boda, Quinceañero, etc.) " },
   { key: "email", question: "¿Cuál es tu correo electrónico?" },
   { key: "phone", question: "¿Y tu número de teléfono?" }
@@ -171,6 +172,12 @@ if (distanceFee > 0) {
   price += distanceFee;
   breakdown += ` + recargo por distancia ($${distanceFee})`;
 }
+  // Recargo por segundo piso
+if (lead.floor === "2" || (lead.floor || "").toLowerCase().includes("segundo")) {
+  price += 100;
+  breakdown += " + recargo por segundo piso ($100)";
+}
+
 
   return { price, hours, breakdown };
 }
@@ -239,6 +246,7 @@ await resend.emails.send({
     <p><strong>Fecha:</strong> ${lead.date}</p>
     <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
     <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
+    <p><strong>Piso:</strong> ${lead.floor}</p>
     <p><strong>Actividad:</strong> ${lead.eventType}</p>
     <hr>
     <p>${quote.breakdown}</p>
@@ -261,6 +269,7 @@ await resend.emails.send({
     <p><strong>Fecha:</strong> ${lead.date}</p>
     <p><strong>Horario:</strong> ${lead.startTime} - ${lead.endTime}</p>
     <p><strong>Lugar:</strong> ${lead.town} (${lead.venueType})</p>
+    <p><strong>Piso:</strong> ${lead.floor}</p>
     <p><strong>Actividad:</strong> ${lead.eventType}</p>
     <p>${quote.breakdown}</p>
     <h3>Total estimado: $${quote.price}</h3>
