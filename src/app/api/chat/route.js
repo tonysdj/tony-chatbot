@@ -82,6 +82,7 @@ const townFees = {
   "manati": 50,
   "ciales": 50,
   "morovis": 50,
+  "corozal": 50,
   "barranquitas": 50,
   "orocovis": 50,
   "caguas": 50,
