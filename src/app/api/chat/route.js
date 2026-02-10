@@ -69,7 +69,7 @@ const townFees = {
   "carolina": 0,
   "trujillo alto": 0,
   "bayamon": 0,
-  "cataño": 0,
+  "catano": 0,
   "canovanas": 0,
   "trujillo alto": 0,
 
