@@ -10,7 +10,7 @@ const STEPS = [
   { key: "startTime", question: "¿A qué hora comienza la actividad?" },
   { key: "endTime", question: "¿Y a qué hora termina?" },
   { key: "town", question: "¿En qué pueblo será el evento?" },
-  { key: "venueType", question: "¿Donde será la actividad? (Casa, Salón de Actividades, Hotel, etc." },
+  { key: "venueType", question: "¿Donde será la actividad? (Casa, Salón de Actividades, Hotel, etc.)" },
   { key: "eventType", question: "¿Qué tipo de actividad es? (Cumpleaños, Boda, Quinceañero, etc.) " },
   { key: "email", question: "¿Cuál es tu correo electrónico?" },
   { key: "phone", question: "¿Y tu número de teléfono?" }
