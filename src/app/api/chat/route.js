@@ -84,6 +84,7 @@ const townFees = {
 
   // Distancia 2 ($50)
   "arecibo": 50,
+  "barceloneta": 50,
   "manati": 50,
   "ciales": 50,
   "morovis": 50,
