@@ -71,7 +71,12 @@ const townFees = {
   "bayamon": 0,
   "catano": 0,
   "canovanas": 0,
-  "trujillo alto": 0,
+  "hato rey": 0,
+  "cupey": 0,
+  "rio piedras": 0,
+  "isla verde": 0,
+  "levittown": 0,
+  "caguas": 0,
 
   // Distancia 1 ($25)
   "rio grande": 25,
@@ -83,37 +88,42 @@ const townFees = {
   "naranjito": 25,
   "aguas buenas": 25,
   "loiza": 25,
-  "caguas": 25,
+  
 
   // Distancia 2 ($50)
   "arecibo": 50,
   "barceloneta": 50,
-  "corozal": 50,
-  "orocovis": 50,
   "cayey": 50,
-  "san lorenzo": 50,
   "gurabo": 50,
   "juncos": 50,
   "cidra": 50,
   
 
   // Distancia 3 ($75)
+  "san lorenzo": 75,
   "fajardo": 75,
-  "ponce": 75,
+  "luquillo": 75,
   "santa isabel": 75,
-  "salinas": 75,
-  "yabucoa": 75,
-  "maunabo": 75,
   "las piedras": 75,
   "humacao": 75,
   "naguabo": 75,
+  "corozal": 75,
+  "ceiba": 75,
 
   // Distancia 4 ($100)
+  "guayanilla": 100,
+  "penuelas": 100,
+  "ponce": 100,
+  "comerio": 100,
+  "salinas": 100,
+  "yabucoa": 100,
+  "maunabo": 100,
   "barranquitas": 100,
   "florida": 100,
   "manati": 100,
   "ciales": 100,
   "morovis": 100,
+  "orocovis": 100,
   "hatillo": 100,
   "camuy": 100,
   "quebradillas": 100,
@@ -125,11 +135,11 @@ const townFees = {
   "arroyo": 100,
   "patillas": 100,
   "lares": 100,
-  "utuado": 100,
-  "yauco": 100,
   "san sebastian": 100,
+  "castaner": 100,
 
   // Distancia 5 ($200)
+  "utuado": 200,
   "sabana grande": 200,
   "adjuntas": 200,
   "maricao": 200,
@@ -146,6 +156,8 @@ const townFees = {
   "aguada": 200,
   "anasco": 200,
   "moca": 200
+  "guanica": 200
+  "yauco": 200,
 };
 
 const manualQuote = ["vieques","culebra"];
