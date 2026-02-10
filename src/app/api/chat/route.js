@@ -24,10 +24,15 @@ function parseTime(t) {
   const min = m[3] ? parseInt(m[3], 10) : 0;
   let ap = m[4];
 
-// Si no tiene am/pm, asumir pm si la hora es entre 1 y 11
-  if (!ap && h >= 1 && h <= 11) {
-  ap = "pm";
+// Si no tiene am/pm:
+if (!ap) {
+  if (h === 12) {
+    ap = "am"; // asumir medianoche
+  } else if (h >= 1 && h <= 11) {
+    ap = "pm"; // asumir noche
+  }
 }
+
 
   if (ap === "pm" && h < 12) h += 12;
   if (ap === "am" && h === 12) h = 0;
