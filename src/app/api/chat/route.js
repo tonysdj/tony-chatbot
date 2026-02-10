@@ -54,42 +54,83 @@ function calculateQuote(lead) {
     breakdown += ` + ${extra} hora(s) extra ($${extraCost})`;
   }
 
-  const town = (lead.town || "").toLowerCase();
+ const town = (lead.town || "").toLowerCase().trim();
 
-const metro = [
-  "san juan","guaynabo","carolina",
-  "trujillo alto","bayamon","cataño","canovanas"
-];
+const townFees = {
+  // Metro ($0)
+  "san juan": 0,
+  "guaynabo": 0,
+  "carolina": 0,
+  "trujillo alto": 0,
+  "bayamon": 0,
+  "cataño": 0,
+  "canovanas": 0,
 
-const dist1 = [
-  "Rio Grande","toa baja","toa alta","dorado",
-  "vega alta","vega baja",
-  "naranjito","aguas buenas","loiza"
-];
+  // Distancia 1 ($25)
+  "rio grande": 25,
+  "toa baja": 25,
+  "toa alta": 25,
+  "dorado": 25,
+  "vega alta": 25,
+  "vega baja": 25,
+  "naranjito": 25,
+  "aguas buenas": 25,
+  "loiza": 25,
 
-const dist2 = [
-  "arecibo","manati","ciales",
-  "morovis","barranquitas","orocovis",
-  "caguas","cayey","san lorenzo","gurabo"
-];
+  // Distancia 2 ($50)
+  "arecibo": 50,
+  "manati": 50,
+  "ciales": 50,
+  "morovis": 50,
+  "barranquitas": 50,
+  "orocovis": 50,
+  "caguas": 50,
+  "cayey": 50,
+  "san lorenzo": 50,
+  "gurabo": 50,
+  "cidra": 50,
+  "hatillo": 50,
+  "camuy": 50,
+  "quebradillas": 50,
 
-const dist3 = [
-  "fajardo","ponce","juana diaz","villalba",
-  "coamo","santa isabel","salinas",
-  "yabucoa","maunabo"
-];
+  // Distancia 3 ($75)
+  "fajardo": 75,
+  "ponce": 75,
+  "juana diaz": 75,
+  "villalba": 75,
+  "coamo": 75,
+  "santa isabel": 75,
+  "salinas": 75,
+  "yabucoa": 75,
+  "maunabo": 75,
+  "las piedras": 75,
+  "humacao": 75,
+  "naguabo": 75,
 
-const dist4 = [
-  "guayama","arroyo","patillas",
-  "adjuntas","lares","utuado"
-];
+  // Distancia 4 ($100)
+  "guayama": 100,
+  "arroyo": 100,
+  "patillas": 100,
+  "adjuntas": 100,
+  "lares": 100,
+  "utuado": 100,
+  "yauco": 100,
+  "sabana grande": 100,
+  "san sebastian": 100,
 
-const dist5 = [
-  "mayaguez","aguadilla","rincon",
-  "cabo rojo","san german",
-  "hormigueros","lajas",
-  "isabela","aguada"
-];
+  // Distancia 5 ($200)
+  "mayaguez": 200,
+  "aguadilla": 200,
+  "rincon": 200,
+  "cabo rojo": 200,
+  "san german": 200,
+  "hormigueros": 200,
+  "lajas": 200,
+  "isabela": 200,
+  "aguada": 200,
+  "anasco": 200,
+  "moca": 200
+};
 
 const manualQuote = ["vieques","culebra"];
 
@@ -101,29 +142,20 @@ if (manualQuote.includes(town)) {
   };
 }
 
-let distanceFee = 0;
+let distanceFee = townFees[town];
 
-if (metro.includes(town)) {
-  distanceFee = 0;
-} else if (dist1.includes(town)) {
-  distanceFee = 25;
-} else if (dist2.includes(town)) {
-  distanceFee = 50;
-} else if (dist3.includes(town)) {
-  distanceFee = 75;
-} else if (dist4.includes(town)) {
-  distanceFee = 100;
-} else if (dist5.includes(town)) {
-  distanceFee = 200;
-} else {
-  distanceFee = 50;
+if (distanceFee === undefined) {
+  return {
+    price: null,
+    hours,
+    breakdown: "No se pudo calcular la distancia automáticamente. Te estaremos contactando con la cotización."
+  };
 }
 
 if (distanceFee > 0) {
   price += distanceFee;
   breakdown += ` + recargo por distancia ($${distanceFee})`;
 }
-
 
   return { price, hours, breakdown };
 }
