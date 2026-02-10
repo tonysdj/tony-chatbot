@@ -92,6 +92,7 @@ const townFees = {
   "cayey": 50,
   "san lorenzo": 50,
   "gurabo": 50,
+  "juncos": 50,
   "cidra": 50,
   
 
